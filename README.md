@@ -24,8 +24,8 @@ Ayu follows a controlled Software Development Life Cycle:
 3. **Implementation** — develop on an isolated feature branch.
 4. **Verification** — run linting, automated tests, security checks, and feature-specific validation.
 5. **Review** — review code and acceptance criteria before integration.
-6. **Integration** — merge the completed feature into `main`.
-7. **Testing/Release** — `test` and `prod` branches are reserved for later release workflows and are not used yet.
+6. **Integration** — merge the completed, reviewed and verified feature into `dev`.
+7. **Testing/Release** — deploy the integrated `dev` branch to the development environment after CI succeeds. `test` and `prod` branches are reserved for later release workflows.
 8. **Operations** — monitor, document, and maintain released functionality when deployment begins.
 
 ---
@@ -34,14 +34,14 @@ Ayu follows a controlled Software Development Life Cycle:
 
 Long-lived branches:
 
-- `main` — current integrated development baseline.
-- `dev` — reserved development environment branch.
+- `main` — documentation/bootstrap baseline; no feature merges during the current phase.
+- `dev` — active feature integration branch and source for development deployments.
 - `test` — reserved QA/UAT branch; leave untouched for now.
 - `prod` — reserved production branch; leave untouched for now.
 
 ### Feature development
 
-Every feature must be developed in its own branch created from the latest `main`.
+Every feature must be developed in its own branch created from the latest `dev`.
 
 Naming convention:
 
@@ -62,22 +62,25 @@ feature/cgm-integration
 Required flow:
 
 ```text
-main
+dev
   └── feature/<feature-name>
           ├── implementation
           ├── tests
           ├── review
-          └── merge back to main
+          └── pull request and merge back to dev
 ```
 
-For the current phase, do **not** promote changes to `test` or `prod`.
+For the current phase, do **not** promote changes to `main`, `test` or `prod`. Deploy only from `dev`, with CI success required. The static development preview is deployed to GitHub Pages by `.github/workflows/deploy-dev-pages.yml` on every push to `dev`. Configure GitHub Settings → Pages → Build and deployment → Source: GitHub Actions. The initial `site/index.html` is only a placeholder; replace it with the built frontend when the application is implemented. GitHub Pages cannot run the API, MongoDB, or server-side/local AI inference.
 
 ---
 
 ## Engineering rules
 
-- Never develop a product feature directly on `main`.
+- Never develop a product feature directly on `main` or `dev`.
 - Keep feature branches focused on one bounded change.
+- Require a pull request to `dev`, code review, passing lint/type checks, relevant unit/integration tests, and security checks before merging.
+- Run deployment only after the merge to `dev` and successful post-merge checks; never deploy from an unreviewed feature branch.
+- Keep `main`, `test` and `prod` unchanged until an explicit release-strategy decision.
 - Define acceptance criteria before implementation.
 - Add or update automated tests with each feature.
 - Do not commit credentials, API keys, connection strings, tokens, or patient data.
