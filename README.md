@@ -70,7 +70,7 @@ dev
           └── pull request and merge back to dev
 ```
 
-For the current phase, do **not** promote changes to `main`, `test` or `prod`. Deploy only from `dev`, with CI success required. The deployment workflow will be implemented once a hosting target and credentials are selected.
+For the current phase, do **not** promote changes to `main`, `test` or `prod`. Deploy only from `dev`, with CI success required. The static development preview is deployed to GitHub Pages by `.github/workflows/deploy-dev-pages.yml` on every push to `dev`. Configure GitHub Settings → Pages → Build and deployment → Source: GitHub Actions. The initial `site/index.html` is only a placeholder; replace it with the built frontend when the application is implemented. GitHub Pages cannot run the API, MongoDB, or server-side/local AI inference.
 
 ---
 
