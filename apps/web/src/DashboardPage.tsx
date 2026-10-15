@@ -31,7 +31,9 @@ export function DashboardPage() {
     let active = true;
     currentUser().then(identity => {
       if (!active) return;
-      if (!identity) { window.location.hash = '#login'; return; }
+      if (!identity) { window.location.hash = ''; return; }
+      if (window.location.pathname === '/admin' && identity.role === 'patient') { window.location.replace('/login'); return; }
+      if (window.location.pathname === '/login' && identity.role !== 'patient') { window.location.replace('/admin'); return; }
       setUser(identity);
     }).catch(() => { if (active) setError('Could not verify your session. Please retry.'); })
       .finally(() => { if (active) setLoading(false); });
@@ -42,17 +44,17 @@ export function DashboardPage() {
     try {
       const csrf = await getCsrf();
       await logout(csrf);
-      window.location.hash = '#login';
+      window.location.hash = '';
     } catch {
       setError('Sign out failed. Please try again.');
     } finally { setBusy(false); }
   }
   if (loading) return <main className="ayu-login-page"><p role="status">Verifying your session…</p></main>;
-  if (!user) return <main className="ayu-login-page"><div className="ayu-login-card"><p role="alert">{error || 'You must sign in to access your dashboard.'}</p><a href="#login">Go to sign in</a></div></main>;
+  if (!user) return <main className="ayu-login-page"><div className="ayu-login-card"><p role="alert">{error || 'You must sign in to access your dashboard.'}</p><a href={window.location.pathname === '/admin' ? '/admin' : '/login'}>Go to sign in</a></div></main>;
   const roleTitle = user.role === 'admin' ? 'Admin' : user.role === 'dietitian' ? 'Dietitian' : 'Patient';
   return <div className="app-preview">
     <aside className="app-sidebar">
-      <a href="#home" className="app-logo"><span className="app-logo-icon"><Leaf size={20}/></span>ayu<span className="app-logo-dot">.</span></a>
+      <a href="/" className="app-logo"><span className="app-logo-icon"><Leaf size={20}/></span>ayu<span className="app-logo-dot">.</span></a>
       <div className="app-nav-heading">{roleTitle.toUpperCase()} WORKSPACE</div>
       <div className="app-sidebar-bottom"><ShieldCheck size={17}/><span>Authenticated session<br/><small>Role: {user.role}</small></span></div>
     </aside>
