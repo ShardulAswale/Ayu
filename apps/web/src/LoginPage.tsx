@@ -30,7 +30,7 @@ export function LoginPage({ portal }: { portal: Portal }) {
       try {
         const existing = await currentUser();
         const token = await getCsrf();
-        if (!cancelled) { setUser(existing); setCsrf(token); }
+        if (!cancelled) { setUser(existing); setCsrf(token); if (existing && permitted(existing, portal)) window.location.hash = '#dashboard'; }
       } catch { if (!cancelled) setError('Unable to connect to the authentication service.'); }
     })();
     return () => { cancelled = true; };
@@ -42,7 +42,7 @@ export function LoginPage({ portal }: { portal: Portal }) {
     setBusy(true); setError('');
     try {
       const result = await login(email.trim(), password, csrf);
-      setUser(result.user); setCsrf(result.csrfToken); setPassword('');
+      setUser(result.user); setCsrf(result.csrfToken); setPassword(''); if (permitted(result.user, portal)) window.location.hash = '#dashboard';
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Sign-in failed.'); }
     finally { setBusy(false); }
   }

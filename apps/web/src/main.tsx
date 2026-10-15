@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { ArrowRight, CalendarDays, CheckCircle2, HeartPulse, Leaf, LockKeyhole, Menu, ShieldCheck, Sparkles, UtensilsCrossed } from 'lucide-react';
 import './styles.css';
 import { LoginPage } from './LoginPage';
+import { DashboardPage } from './DashboardPage';
 
 const features = [
   { icon: UtensilsCrossed, title: 'Personalized nutrition', text: 'Thoughtful meal plans designed around real lives, preferences, and goals.' },
@@ -14,6 +15,7 @@ function App() {
   React.useEffect(() => { const onHashChange = () => setRoute(window.location.hash); window.addEventListener('hashchange', onHashChange); return () => window.removeEventListener('hashchange', onHashChange); }, []);
   const [menuOpen, setMenuOpen] = React.useState(false);
   const pathname = window.location.pathname.replace(/\/$/, '') || '/';
+  if (route === '#dashboard') return <DashboardPage/>;
   if (pathname === '/admin') return <LoginPage portal="staff"/>;
   if (pathname === '/login' || route === '#login') return <LoginPage portal="customer"/>;
   if (route === '#signup') return <main className="ayu-signup-info" style={{maxWidth:520,margin:'12vh auto',padding:24,fontFamily:'sans-serif'}}><a href="/">← Ayu home</a><h1>Sign up for Ayu</h1><p>Registration is not open yet. Patient accounts will be created through a verified invitation, and dietitian accounts will require approval. No account is created on this page.</p><a className="primary-button" href="/login">Go to customer login <ArrowRight size={18}/></a></main>;
