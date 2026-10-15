@@ -48,8 +48,8 @@ export function LoginPage() {
     <p className="ayu-login-intro">{user ? 'Your backend identity has been verified.' : 'For provisioned dietitian and patient accounts only.'}</p>
     {!configured && <div className="ayu-login-alert" role="status">Secure sign-in is not yet available on this deployment. The API address has not been configured.</div>}
     {error && <div className="ayu-login-alert" role="alert">{error}</div>}
-    {user ? <div className="ayu-login-session"><strong>{user.email}</strong><span>Role: {user.role}</span><p>Dashboard access will be enabled after resource authorization and security verification. The public preview remains separate.</p><button type="button" onClick={signOut} disabled={busy || !csrf}>Sign out</button></div>
+    {user ? <div className="ayu-login-session"><strong>{user.email}</strong><span>Role: {user.role}</span><p>Dashboard access will be enabled after resource authorization and security verification.</p><button type="button" onClick={signOut} disabled={busy || !csrf}>Sign out</button></div>
       : <form onSubmit={submit}><label htmlFor="ayu-email">Email address</label><input id="ayu-email" type="email" autoComplete="username" maxLength={254} required value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com"/><label htmlFor="ayu-password">Password</label><div className="ayu-password-field"><input id="ayu-password" type={visible ? 'text' : 'password'} autoComplete="current-password" required value={password} onChange={e => setPassword(e.target.value)} placeholder="Your password"/><button type="button" onClick={() => setVisible(v => !v)} aria-label={visible ? 'Hide password' : 'Show password'}>{visible ? <EyeOff size={17}/> : <Eye size={17}/>}</button></div><button className="ayu-login-submit" type="submit" disabled={!configured || !csrf || busy}>{busy ? 'Signing in…' : 'Sign in'}</button></form>}
-    <p className="ayu-login-note">No public registration is available. <a href="#workspace">Explore the dashboard preview</a>.</p>
+    <p className="ayu-login-note">New to Ayu? <a href="#signup">Sign up information</a>.</p>
   </div></main>;
 }
