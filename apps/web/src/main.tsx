@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { ArrowRight, CalendarDays, CheckCircle2, HeartPulse, Leaf, LockKeyhole, Menu, ShieldCheck, Sparkles, UtensilsCrossed } from 'lucide-react';
 import './styles.css';
 import { AppPreview } from './AppPreview';
+import { LoginPage } from './LoginPage';
 
 const features = [
   { icon: UtensilsCrossed, title: 'Personalized nutrition', text: 'Thoughtful meal plans designed around real lives, preferences, and goals.' },
@@ -14,6 +15,7 @@ function App() {
   React.useEffect(() => { const onHashChange = () => setRoute(window.location.hash); window.addEventListener('hashchange', onHashChange); return () => window.removeEventListener('hashchange', onHashChange); }, []);
   const [menuOpen, setMenuOpen] = React.useState(false);
   if (route === '#workspace') return <AppPreview/>;
+  if (route === '#login') return <LoginPage/>;
   return <>
     <header className="header"><div className="container header-inner"><a className="brand" href="#home" aria-label="Ayu home"><span className="brand-mark"><Leaf size={19}/></span>ayu<span className="brand-dot">.</span></a><nav className={menuOpen?'nav open':'nav'} aria-label="Main navigation"><a href="#approach" onClick={()=>setMenuOpen(false)}>Our approach</a><a href="#features" onClick={()=>setMenuOpen(false)}>What we're building</a><a href="#about" onClick={()=>setMenuOpen(false)}>About</a></nav><a className="header-status" href="#workspace"><span className="status-dot"/> Workspace preview →</a><button className="menu-button" onClick={()=>setMenuOpen(v=>!v)} aria-label="Toggle navigation" aria-expanded={menuOpen}><Menu size={23}/></button></div></header>
     <main id="home"><section className="hero"><div className="container hero-grid"><div className="hero-copy"><div className="eyebrow"><Sparkles size={15}/> A more considered way to care</div><h1>Better nutrition.<br/><em>Better everyday.</em></h1><p className="hero-lede">A calmer, more personal approach to nutrition care — connecting dietitian guidance, everyday meals, and meaningful progress.</p><a className="primary-button" href="#workspace">Explore workspace preview <ArrowRight size={18}/></a><div className="hero-footnote"><LockKeyhole size={15}/> A preview of Ayu. No patient data is collected here.</div></div><div className="hero-art" aria-label="Decorative botanical illustration"><div className="art-circle"/><div className="art-leaf leaf-one"/><div className="art-leaf leaf-two"/><div className="art-leaf leaf-three"/><div className="art-stem"/><div className="floating-card"><div className="card-icon"><HeartPulse size={21}/></div><div><strong>Care that feels personal</strong><span>Made for your everyday</span></div><CheckCircle2 size={19} className="card-check"/></div><div className="art-caption">NOURISH • GROW • THRIVE</div></div></div></section>
