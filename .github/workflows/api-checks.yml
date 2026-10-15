@@ -1,0 +1,26 @@
+name: API checks
+on:
+  pull_request:
+    branches: [dev]
+    paths:
+      - 'apps/api/**'
+      - '.github/workflows/api-checks.yml'
+  push:
+    branches: [dev]
+    paths:
+      - 'apps/api/**'
+      - '.github/workflows/api-checks.yml'
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install API dependencies
+        run: npm --prefix apps/api install
+      - name: Typecheck
+        run: npm --prefix apps/api run typecheck
+      - name: Build
+        run: npm --prefix apps/api run build
