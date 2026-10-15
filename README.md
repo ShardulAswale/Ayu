@@ -118,3 +118,13 @@ Architecture and implementation decisions will evolve through feature-level SDLC
 ## Cloudflare development deployment
 
 The development frontend is in `apps/web` on the `dev` branch. Cloudflare builds should use the `dev` branch, install dependencies in `apps/web`, and publish `apps/web/dist`. The NestJS API and database are not part of this static frontend deployment.
+
+### Cloudflare Workers application routes
+
+The Cloudflare deployment serves the same React application for all browser paths using `wrangler.jsonc` with `assets.not_found_handling = "single-page-application"`.
+
+- `/login` — customer/patient sign-in (`patient` role).
+- `/admin` — dietitian and administrator sign-in (`dietitian` or `admin` role).
+- `/` — public landing page. Legacy `/#login` remains accepted.
+
+Build with `VITE_API_URL=https://ayu-sdli.onrender.com` set in the frontend build environment, then deploy from the repository root with `npx wrangler deploy --config wrangler.jsonc`. Verify that direct navigation and page refresh on both paths return the React app (not a 404). The frontend checks the role returned by `/auth/me` and `/auth/login`; this is navigation separation only, **not** authorization for protected resources. Every future staff/patient API endpoint must enforce its own server-side role and resource-access policies. Signup is not enabled.
