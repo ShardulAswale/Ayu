@@ -18,6 +18,6 @@ export function sessionMiddleware(config: ConfigService): RequestHandler {
     rolling: true,
     genid: () => randomBytes(32).toString('hex'),
     store: MongoStore.create({ mongoUrl: uri, collectionName: 'Sessions', ttl: 60 * 60 * 8, autoRemove: 'native' }),
-    cookie: { httpOnly: true, secure: isProduction, sameSite: 'lax', maxAge: 1000 * 60 * 60 * 8, path: '/' },
+    cookie: { httpOnly: true, secure: isProduction, sameSite: isProduction ? 'none' : 'lax', maxAge: 1000 * 60 * 60 * 8, path: '/' },
   });
 }
