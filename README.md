@@ -114,3 +114,7 @@ Planned capability areas include:
 - Privacy, consent, audit, and integration controls
 
 Architecture and implementation decisions will evolve through feature-level SDLC work.
+
+## Cloudflare development deployment
+
+The development frontend is in `apps/web` on the `dev` branch. Cloudflare builds should use the `dev` branch, install dependencies in `apps/web`, and publish `apps/web/dist`. The NestJS API and database are not part of this static frontend deployment.
