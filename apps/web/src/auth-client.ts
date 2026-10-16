@@ -17,14 +17,14 @@ async function parseError(response: Response): Promise<never> {
   throw new Error('Unable to complete the request. Please try again.');
 }
 export async function getCsrf(): Promise<string> {
-  const response = await fetch(endpoint('/auth/csrf'), { credentials: 'include' });
+  const response = await fetch(endpoint('/auth/csrf'), { credentials: 'include', cache: 'no-store' });
   if (!response.ok) return parseError(response);
   const data = await response.json() as { csrfToken: string };
   return data.csrfToken;
 }
 export async function login(email: string, password: string, csrfToken: string): Promise<{ user: SessionUser; csrfToken: string }> {
   const response = await fetch(endpoint('/auth/login'), {
-    method: 'POST', credentials: 'include',
+    method: 'POST', credentials: 'include', cache: 'no-store',
     headers: { 'content-type': 'application/json', 'x-ayu-csrf': csrfToken },
     body: JSON.stringify({ email, password }),
   });
@@ -32,7 +32,7 @@ export async function login(email: string, password: string, csrfToken: string):
   return response.json() as Promise<{ user: SessionUser; csrfToken: string }>;
 }
 export async function currentUser(): Promise<SessionUser | null> {
-  const response = await fetch(endpoint('/auth/me'), { credentials: 'include' });
+  const response = await fetch(endpoint('/auth/me'), { credentials: 'include', cache: 'no-store' });
   if (response.status === 401) return null;
   if (!response.ok) return parseError(response);
   const data = await response.json() as { user: SessionUser };
@@ -40,7 +40,7 @@ export async function currentUser(): Promise<SessionUser | null> {
 }
 export async function logout(csrfToken: string): Promise<void> {
   const response = await fetch(endpoint('/auth/logout'), {
-    method: 'POST', credentials: 'include', headers: { 'x-ayu-csrf': csrfToken },
+    method: 'POST', credentials: 'include', cache: 'no-store', headers: { 'x-ayu-csrf': csrfToken },
   });
   if (!response.ok) return parseError(response);
 }
@@ -51,7 +51,7 @@ export interface DashboardSummary {
   sections: { key: string; title: string; description: string; items: unknown[] }[];
 }
 export async function dashboardSummary(): Promise<DashboardSummary> {
-  const response = await fetch(endpoint('/dashboard/summary'), { credentials: 'include' });
+  const response = await fetch(endpoint('/dashboard/summary'), { credentials: 'include', cache: 'no-store' });
   if (!response.ok) return parseError(response);
   return response.json() as Promise<DashboardSummary>;
 }
