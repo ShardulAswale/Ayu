@@ -6,9 +6,7 @@
     "build": "nest build",
     "start": "node dist/main.js",
     "dev": "nest start --watch",
-    "typecheck": "tsc --noEmit",
-    "seed:demo": "node scripts/seed-demo-users.mjs",
-    "test:seed": "node --test scripts/demo-users.test.mjs"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@nestjs/common": "^10.4.15",
