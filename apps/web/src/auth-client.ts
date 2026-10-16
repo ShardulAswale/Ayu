@@ -38,3 +38,14 @@ export async function logout(csrfToken: string): Promise<void> {
   });
   if (!response.ok) return parseError(response);
 }
+
+export interface DashboardSummary {
+  role: SessionUser['role'];
+  metrics: { key: string; label: string; count: number; description: string }[];
+  sections: { key: string; title: string; description: string; items: unknown[] }[];
+}
+export async function dashboardSummary(): Promise<DashboardSummary> {
+  const response = await fetch(endpoint('/dashboard/summary'), { credentials: 'include' });
+  if (!response.ok) return parseError(response);
+  return response.json() as Promise<DashboardSummary>;
+}

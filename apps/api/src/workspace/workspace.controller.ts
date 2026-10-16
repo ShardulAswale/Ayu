@@ -1,0 +1,441 @@
+import {
+  BadRequestException, Body, Controller, Delete, ForbiddenException, Get,
+  Injectable, NotFoundException, Param, Patch, Post, Put, Query, Req, UseGuards,
+} from '@nestjs/common';
+import { InjectConnection, InjectModel } from '@nestjs/mongoose';
+import { Connection, Model, Types } from 'mongoose';
+import { Request } from 'express';
+import { CsrfGuard } from '../auth/csrf.guard';
+import { Roles } from '../auth/roles.decorator';
+import { RolesGuard } from '../auth/roles.guard';
+import { User, UserRole } from '../auth/user.schema';
+import {
+  AppointmentDto, AssignmentDto, FoodEntryDto, LayoutDto, PlanEditDto,
+  PlanEntryDto, ProgressDto, RecipeDto,
+} from './workspace.dto';
+
+const COLLECTION = {
+  entries: 'FoodEntries', recipes: 'Recipes', plans: 'DietPlans',
+  appointments: 'Appointments', assignments: 'PatientAssignments',
+  layouts: 'DashboardLayouts', progress: 'ProgressEntries',
+} as const;
+const VALID_WIDGETS = [
+  'patients', 'meetings', 'reviews', 'plans', 'activity', 'appointments', 'dietitians',
+] as const;
+const oid = (id: string) => new Types.ObjectId(id);
+const out = (doc: Record<string, any>) => {
+  const { _id, ...fields } = doc;
+  return { id: String(_id), ...fields };
+};
+
+@Injectable()
+@Controller('workspace')
+@Roles('admin', 'dietitian', 'patient')
+@UseGuards(RolesGuard)
+export class WorkspaceController {
+  constructor(
+    @InjectConnection() private readonly connection: Connection,
+    @InjectModel(User.name) private readonly users: Model<User>,
+  ) {}
+
+  private collection(name: keyof typeof COLLECTION) {
+    return this.connection.db!.collection(COLLECTION[name]);
+  }
+
+  private async identity(req: Request) {
+    const user = await this.users.findById(req.session.userId).select('role email').lean();
+    if (!user) throw new ForbiddenException();
+    return { id: String(user._id), role: user.role as UserRole };
+  }
+
+  private validId(value: string) {
+    if (!Types.ObjectId.isValid(value) || String(oid(value)) !== value.toLowerCase()) {
+      throw new BadRequestException('Invalid resource ID');
+    }
+    return oid(value);
+  }
+
+  // One access check for every patient-scoped read and practitioner write.
+  private async patientId(req: Request, requested?: string) {
+    const user = await this.identity(req);
+    const target = requested || (user.role === 'patient' ? user.id : '');
+    if (!target) throw new BadRequestException('Select a patient');
+    const id = this.validId(target);
+    if (user.role === 'patient' && target !== user.id) throw new ForbiddenException();
+    if (user.role === 'dietitian') {
+      const assigned = await this.collection('assignments').findOne({
+        patientId: id, dietitianId: oid(user.id),
+      });
+      if (!assigned) throw new ForbiddenException('Not assigned to this patient');
+    }
+    const patient = await this.users.findOne({ _id: id, role: 'patient', active: true }).select('_id').lean();
+    if (!patient) throw new NotFoundException('Patient not found');
+    return id;
+  }
+
+  private async staff(req: Request) {
+    const user = await this.identity(req);
+    if (user.role === 'patient') throw new ForbiddenException();
+    return user;
+  }
+
+  private range(from?: string, to?: string) {
+    const start = from ? new Date(from) : new Date(Date.now() - 31 * 86400000);
+    const end = to ? new Date(to) : new Date(Date.now() + 31 * 86400000);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) ||
+        end < start || end.getTime() - start.getTime() > 370 * 86400000) {
+      throw new BadRequestException('Invalid date range (maximum 370 days)');
+    }
+    return { $gte: start, $lte: end };
+  }
+
+  @Get('patients')
+  @Roles('admin', 'dietitian')
+  async patients(@Req() req: Request) {
+    const user = await this.staff(req);
+    const ids = user.role === 'dietitian'
+      ? (await this.collection('assignments').find({ dietitianId: oid(user.id) }).limit(500).toArray()).map(a => a.patientId)
+      : undefined;
+    if (ids && ids.length === 0) return [];
+    const records = await this.users.find({
+      role: 'patient', active: true, ...(ids ? { _id: { $in: ids } } : {}),
+    }).select('email').sort({ email: 1 }).limit(500).lean();
+    return records.map(r => ({ id: String(r._id), email: r.email }));
+  }
+
+  @Get('dietitians')
+  @Roles('admin')
+  async dietitians() {
+    const records = await this.users.find({ role: 'dietitian', active: true })
+      .select('email').sort({ email: 1 }).limit(500).lean();
+    return records.map(r => ({ id: String(r._id), email: r.email }));
+  }
+
+  @Post('assignments')
+  @Roles('admin')
+  @UseGuards(CsrfGuard)
+  async assign(@Body() dto: AssignmentDto, @Req() req: Request) {
+    await this.patientId(req, dto.patientId);
+    const clinician = await this.users.findOne({
+      _id: this.validId(dto.dietitianId), role: 'dietitian', active: true,
+    }).select('_id').lean();
+    if (!clinician) throw new BadRequestException('Dietitian is not active');
+    await this.collection('assignments').updateOne(
+      { patientId: oid(dto.patientId), dietitianId: oid(dto.dietitianId) },
+      { $setOnInsert: { createdAt: new Date(), assignedBy: oid(req.session.userId!) } },
+      { upsert: true },
+    );
+    return { ok: true };
+  }
+
+  @Get('recipes')
+  async recipes() {
+    return (await this.collection('recipes').find({}).sort({ name: 1 }).limit(250).toArray()).map(out);
+  }
+
+  @Post('recipes')
+  @Roles('admin', 'dietitian')
+  @UseGuards(CsrfGuard)
+  async addRecipe(@Req() req: Request, @Body() dto: RecipeDto) {
+    const user = await this.staff(req);
+    const now = new Date();
+    const result = await this.collection('recipes').insertOne({
+      ...dto, name: dto.name.trim(), createdBy: oid(user.id), createdAt: now, updatedAt: now,
+    });
+    return { id: String(result.insertedId) };
+  }
+
+  @Patch('recipes/:id')
+  @Roles('admin', 'dietitian')
+  @UseGuards(CsrfGuard)
+  async editRecipe(@Req() req: Request, @Param('id') id: string, @Body() dto: RecipeDto) {
+    await this.staff(req);
+    const result = await this.collection('recipes').updateOne(
+      { _id: this.validId(id) }, { $set: { ...dto, name: dto.name.trim(), updatedAt: new Date() } },
+    );
+    if (!result.matchedCount) throw new NotFoundException();
+    return { ok: true };
+  }
+
+  @Delete('recipes/:id')
+  @Roles('admin', 'dietitian')
+  @UseGuards(CsrfGuard)
+  async deleteRecipe(@Req() req: Request, @Param('id') id: string) {
+    await this.staff(req);
+    await this.collection('recipes').deleteOne({ _id: this.validId(id) });
+    return { ok: true };
+  }
+
+  @Get('entries')
+  async entries(@Req() req: Request, @Query('patientId') patient?: string,
+    @Query('from') from?: string, @Query('to') to?: string) {
+    const id = await this.patientId(req, patient);
+    return (await this.collection('entries').find({
+      patientId: id, eatenAt: this.range(from, to),
+    }).sort({ eatenAt: -1 }).limit(250).toArray()).map(out);
+  }
+
+  @Post('entries')
+  @Roles('patient')
+  @UseGuards(CsrfGuard)
+  async addEntry(@Req() req: Request, @Body() dto: FoodEntryDto) {
+    const identity = await this.identity(req);
+    const date = new Date(dto.eatenAt);
+    if (Number.isNaN(date.getTime())) throw new BadRequestException('Invalid eating time');
+    let nutrition = { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 };
+    if (dto.recipeId) {
+      if (dto.unit !== 'serving') throw new BadRequestException('Recipe quantities must use serving units');
+      const recipe = await this.collection('recipes').findOne({ _id: this.validId(dto.recipeId) });
+      if (!recipe) throw new BadRequestException('Recipe not found');
+      nutrition = {
+        calories: (recipe.calories || 0) * dto.quantity,
+        protein: (recipe.protein || 0) * dto.quantity,
+        carbs: (recipe.carbs || 0) * dto.quantity,
+        fat: (recipe.fat || 0) * dto.quantity,
+        fiber: (recipe.fiber || 0) * dto.quantity,
+      };
+    }
+    const result = await this.collection('entries').insertOne({
+      patientId: oid(identity.id), foodName: dto.foodName.trim(),
+      eatenAt: date, quantity: dto.quantity, unit: dto.unit.trim(),
+      ...(dto.recipeId ? { recipeId: oid(dto.recipeId) } : {}),
+      notes: dto.notes || '', nutrition, nutritionAvailable: Boolean(dto.recipeId),
+      createdAt: new Date(), updatedAt: new Date(),
+    });
+    return { id: String(result.insertedId) };
+  }
+
+  @Patch('entries/:id')
+  @Roles('patient')
+  @UseGuards(CsrfGuard)
+  async editEntry(@Req() req: Request, @Param('id') id: string, @Body() dto: FoodEntryDto) {
+    let nutrition = { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 };
+    if (dto.recipeId) {
+      if (dto.unit !== 'serving') throw new BadRequestException('Recipe quantities must use serving units');
+      const recipe = await this.collection('recipes').findOne({ _id: this.validId(dto.recipeId) });
+      if (!recipe) throw new BadRequestException('Recipe not found');
+      nutrition = {
+        calories: (recipe.calories || 0) * dto.quantity,
+        protein: (recipe.protein || 0) * dto.quantity,
+        carbs: (recipe.carbs || 0) * dto.quantity,
+        fat: (recipe.fat || 0) * dto.quantity,
+        fiber: (recipe.fiber || 0) * dto.quantity,
+      };
+    }
+    const r = await this.collection('entries').updateOne({
+      _id: this.validId(id), patientId: oid(req.session.userId!),
+    }, { $set: {
+      foodName: dto.foodName.trim(), eatenAt: new Date(dto.eatenAt), quantity: dto.quantity,
+      unit: dto.unit, notes: dto.notes || '', nutrition,
+      recipeId: dto.recipeId ? oid(dto.recipeId) : null,
+      nutritionAvailable: Boolean(dto.recipeId), updatedAt: new Date(),
+    } });
+    if (!r.matchedCount) throw new NotFoundException();
+    return { ok: true };
+  }
+
+  @Delete('entries/:id')
+  @Roles('patient')
+  @UseGuards(CsrfGuard)
+  async deleteEntry(@Req() req: Request, @Param('id') id: string) {
+    await this.collection('entries').deleteOne({
+      _id: this.validId(id), patientId: oid(req.session.userId!),
+    });
+    return { ok: true };
+  }
+
+  @Get('plans')
+  async plans(@Req() req: Request, @Query('patientId') patient?: string,
+    @Query('from') from?: string, @Query('to') to?: string) {
+    const id = await this.patientId(req, patient);
+    const identity = await this.identity(req);
+    const records = await this.collection('plans').find({
+      patientId: id, plannedAt: this.range(from, to),
+      ...(identity.role === 'patient' ? { status: 'published' } : {}),
+    }).sort({ plannedAt: 1 }).limit(250).toArray();
+    return records.map(out);
+  }
+
+  @Post('plans')
+  @Roles('admin', 'dietitian')
+  @UseGuards(CsrfGuard)
+  async addPlan(@Req() req: Request, @Body() dto: PlanEntryDto) {
+    const user = await this.staff(req);
+    const patientId = await this.patientId(req, dto.patientId);
+    if (dto.recipeId && !await this.collection('recipes').findOne({ _id: this.validId(dto.recipeId) })) {
+      throw new BadRequestException('Recipe not found');
+    }
+    const result = await this.collection('plans').insertOne({
+      patientId, title: dto.title.trim(), plannedAt: new Date(dto.plannedAt),
+      status: dto.status, notes: dto.notes || '',
+      ...(dto.recipeId ? { recipeId: oid(dto.recipeId) } : {}),
+      createdBy: oid(user.id), createdAt: new Date(), updatedAt: new Date(),
+    });
+    return { id: String(result.insertedId) };
+  }
+
+  @Patch('plans/:id')
+  @Roles('admin', 'dietitian')
+  @UseGuards(CsrfGuard)
+  async editPlan(@Req() req: Request, @Param('id') id: string, @Body() dto: PlanEditDto) {
+    await this.staff(req);
+    const record = await this.collection('plans').findOne({ _id: this.validId(id) });
+    if (!record) throw new NotFoundException();
+    await this.patientId(req, String(record.patientId));
+    if (Object.keys(dto).length === 0) throw new BadRequestException('No updates');
+    const update: Record<string, unknown> = { ...dto, updatedAt: new Date() };
+    if (dto.plannedAt) update.plannedAt = new Date(dto.plannedAt);
+    if (dto.title) update.title = dto.title.trim();
+    await this.collection('plans').updateOne({ _id: record._id }, { $set: update });
+    return { ok: true };
+  }
+
+  @Delete('plans/:id')
+  @Roles('admin', 'dietitian')
+  @UseGuards(CsrfGuard)
+  async deletePlan(@Req() req: Request, @Param('id') id: string) {
+    await this.staff(req);
+    const record = await this.collection('plans').findOne({ _id: this.validId(id) });
+    if (!record) throw new NotFoundException();
+    await this.patientId(req, String(record.patientId));
+    await this.collection('plans').deleteOne({ _id: record._id });
+    return { ok: true };
+  }
+
+  @Get('appointments')
+  async appointments(@Req() req: Request, @Query('patientId') patient?: string) {
+    const identity = await this.identity(req);
+    let filter: Record<string, any>;
+    if (identity.role === 'patient' || patient) {
+      const patientId = await this.patientId(req, patient);
+      filter = { patientId, ...(identity.role === 'dietitian' ? { dietitianId: oid(identity.id) } : {}) };
+    } else if (identity.role === 'dietitian') {
+      filter = { dietitianId: oid(identity.id) };
+    } else {
+      filter = {};
+    }
+    return (await this.collection('appointments').find(filter).sort({ startsAt: 1 }).limit(250).toArray()).map(out);
+  }
+
+  @Post('appointments')
+  @Roles('admin', 'dietitian')
+  @UseGuards(CsrfGuard)
+  async addAppointment(@Req() req: Request, @Body() dto: AppointmentDto) {
+    const identity = await this.staff(req);
+    await this.patientId(req, dto.patientId);
+    if (identity.role === 'dietitian' && identity.id !== dto.dietitianId) throw new ForbiddenException();
+    const clinician = await this.users.findOne({
+      _id: this.validId(dto.dietitianId), role: 'dietitian', active: true,
+    }).select('_id').lean();
+    if (!clinician) throw new BadRequestException('Dietitian unavailable');
+    const result = await this.collection('appointments').insertOne({
+      patientId: oid(dto.patientId), dietitianId: oid(dto.dietitianId),
+      startsAt: new Date(dto.startsAt), title: dto.title.trim(),
+      durationMinutes: dto.durationMinutes, createdAt: new Date(), createdBy: oid(identity.id),
+    });
+    return { id: String(result.insertedId) };
+  }
+
+  @Delete('appointments/:id')
+  @Roles('admin', 'dietitian')
+  @UseGuards(CsrfGuard)
+  async deleteAppointment(@Req() req: Request, @Param('id') id: string) {
+    const user = await this.staff(req);
+    const item = await this.collection('appointments').findOne({ _id: this.validId(id) });
+    if (!item) throw new NotFoundException();
+    await this.patientId(req, String(item.patientId));
+    if (user.role === 'dietitian' && String(item.dietitianId) !== user.id) throw new ForbiddenException();
+    await this.collection('appointments').deleteOne({ _id: item._id });
+    return { ok: true };
+  }
+
+  @Get('progress')
+  async progress(@Req() req: Request, @Query('patientId') patient?: string) {
+    const patientId = await this.patientId(req, patient);
+    return (await this.collection('progress').find({ patientId })
+      .sort({ measuredAt: -1 }).limit(100).toArray()).map(out);
+  }
+
+  @Post('progress')
+  @Roles('patient')
+  @UseGuards(CsrfGuard)
+  async addProgress(@Req() req: Request, @Body() dto: ProgressDto) {
+    const r = await this.collection('progress').insertOne({
+      ...dto, measuredAt: new Date(dto.measuredAt),
+      patientId: oid(req.session.userId!), createdAt: new Date(),
+    });
+    return { id: String(r.insertedId) };
+  }
+
+  @Get('layout')
+  @Roles('admin', 'dietitian')
+  async layout(@Req() req: Request) {
+    const user = await this.staff(req);
+    const layout = await this.collection('layouts').findOne({ userId: oid(user.id) });
+    return { widgets: layout?.widgets || [...VALID_WIDGETS] };
+  }
+
+  @Put('layout')
+  @Roles('admin', 'dietitian')
+  @UseGuards(CsrfGuard)
+  async updateLayout(@Req() req: Request, @Body() dto: LayoutDto) {
+    const user = await this.staff(req);
+    if (new Set(dto.widgets).size !== dto.widgets.length ||
+        dto.widgets.some(widget => !VALID_WIDGETS.includes(widget as typeof VALID_WIDGETS[number]))) {
+      throw new BadRequestException('Invalid widget list');
+    }
+    await this.collection('layouts').updateOne(
+      { userId: oid(user.id) },
+      { $set: { widgets: dto.widgets, updatedAt: new Date() } },
+      { upsert: true },
+    );
+    return { widgets: dto.widgets };
+  }
+
+  @Get('stats')
+  async stats(@Req() req: Request, @Query('offset') offset?: string) {
+    const user = await this.identity(req);
+    const now = new Date();
+    const minutes = offset === undefined ? 0 : Number(offset);
+    if (!Number.isInteger(minutes) || minutes < -840 || minutes > 840) {
+      throw new BadRequestException('Invalid timezone offset');
+    }
+    const localMs = now.getTime() - minutes * 60000;
+    const start = new Date(Math.floor(localMs / 86400000) * 86400000 + minutes * 60000);
+    const end = new Date(start.getTime() + 86400000);
+    if (user.role === 'patient') {
+      const [entries, appointments, plans, progress] = await Promise.all([
+        this.collection('entries').find({ patientId: oid(user.id), eatenAt: { $gte: start, $lt: end } }).limit(250).toArray(),
+        this.collection('appointments').countDocuments({ patientId: oid(user.id), startsAt: { $gte: now } }),
+        this.collection('plans').countDocuments({ patientId: oid(user.id), status: 'published' }),
+        this.collection('progress').countDocuments({ patientId: oid(user.id) }),
+      ]);
+      const total = (field: string) => Math.round(entries.reduce((sum, e) => sum + (e.nutrition?.[field] || 0), 0));
+      return { role: user.role, values: { entries: entries.length, calories: total('calories'),
+        protein: total('protein'), appointments, plans, progress } };
+    }
+    let patients: number;
+    let planFilter: Record<string, unknown> = {};
+    let appointmentFilter: Record<string, unknown> = {};
+    if (user.role === 'dietitian') {
+      const assignments = await this.collection('assignments').find({ dietitianId: oid(user.id) }).limit(500).toArray();
+      const ids = assignments.map(x => x.patientId);
+      patients = await this.users.countDocuments({ role: 'patient', active: true, _id: { $in: ids } });
+      planFilter = { patientId: { $in: ids } };
+      appointmentFilter = { dietitianId: oid(user.id) };
+    } else {
+      patients = await this.users.countDocuments({ role: 'patient', active: true });
+    }
+    const [meetings, plans, dietitians] = await Promise.all([
+      this.collection('appointments').countDocuments({
+        ...appointmentFilter, startsAt: { $gte: start, $lt: end },
+      }),
+      this.collection('plans').countDocuments({ ...planFilter, status: 'published' }),
+      user.role === 'admin'
+        ? this.users.countDocuments({ role: 'dietitian', active: true })
+        : Promise.resolve(0),
+    ]);
+    return { role: user.role, values: { patients, meetings, reviews: 0, plans, activity: 0,
+      appointments: meetings, dietitians } };
+  }
+}

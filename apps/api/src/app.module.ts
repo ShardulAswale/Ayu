@@ -3,7 +3,9 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 import { HealthController } from './health.controller';
+import { WorkspaceController } from './workspace/workspace.controller';
 import { AuthModule } from './auth/auth.module';
+import { DashboardController } from './dashboard/dashboard.controller';
 
 @Module({
   imports: [
@@ -24,6 +26,6 @@ import { AuthModule } from './auth/auth.module';
       },
     }),
   ],
-  controllers: [HealthController],
+  controllers: [HealthController, DashboardController, WorkspaceController],
 })
 export class AppModule {}
