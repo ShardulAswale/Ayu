@@ -9,12 +9,15 @@ import { CsrfGuard } from './csrf.guard';
 import { LoginDto } from './login.dto';
 import { PasswordService } from './password.service';
 import { User } from './user.schema';
+import { ConfigService } from '@nestjs/config';
+import { requestSignature } from './session-binding.middleware';
 
 @Controller('auth')
 export class AuthController {
   constructor(
     @InjectModel(User.name) private readonly users: Model<User>,
     private readonly passwords: PasswordService,
+    private readonly config: ConfigService,
   ) {}
 
   @Get('csrf')
@@ -35,6 +38,7 @@ export class AuthController {
     await new Promise<void>((resolve, reject) => req.session.regenerate(err => err ? reject(err) : resolve()));
     req.session.userId = user.id as string;
     req.session.sessionVersion = user.sessionVersion;
+    req.session.clientSignature = requestSignature(req, this.config.getOrThrow<string>('SESSION_SECRET'));
     req.session.csrfToken = randomBytes(32).toString('hex');
     await new Promise<void>((resolve, reject) => req.session.save(err => err ? reject(err) : resolve()));
     return { user: { id: user.id, email: user.email, role: user.role }, csrfToken: req.session.csrfToken };

@@ -8,7 +8,8 @@
     "dev": "nest start --watch",
     "typecheck": "tsc --noEmit",
     "test:workspace": "node --test tests/workspace-access.test.mjs",
-    "test:smoke": "node -e \"require('./dist/app.module.js'); console.log('Nest module imports loaded')\""
+    "test:smoke": "node -e \"require('./dist/app.module.js'); console.log('Nest module imports loaded')\"",
+    "test:session": "node --test tests/session-binding.test.mjs"
   },
   "dependencies": {
     "@nestjs/common": "^12.1.3",

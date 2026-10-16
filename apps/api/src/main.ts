@@ -5,6 +5,7 @@ import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { ConfigService } from '@nestjs/config';
 import { sessionMiddleware } from './auth/session.config';
+import { sessionBindingMiddleware } from './auth/session-binding.middleware';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -12,6 +13,7 @@ async function bootstrap() {
   if (config.get<string>('NODE_ENV') === 'production') app.getHttpAdapter().getInstance().set('trust proxy', 1);
   app.use(helmet());
   app.use(sessionMiddleware(config));
+  app.use(sessionBindingMiddleware(config));
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
   const origins = (process.env.CORS_ORIGINS || 'http://localhost:5173').split(',').map(value => value.trim()).filter(Boolean);
   app.enableCors({ origin: origins, credentials: true });
