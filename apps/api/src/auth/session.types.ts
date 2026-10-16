@@ -6,5 +6,7 @@ declare module 'express-session' {
     userId?: string;
     sessionVersion?: number;
     clientSignature?: string;
+    clientIpSignature?: string;
+    clientAgentSignature?: string;
   }
 }

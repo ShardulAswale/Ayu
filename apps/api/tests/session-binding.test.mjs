@@ -2,10 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
-const { requestSignature, sessionBindingMiddleware } = require('../dist/auth/session-binding.middleware.js');
+const { requestSignature, requestBinding, sessionBindingMiddleware } = require('../dist/auth/session-binding.middleware.js');
+const { sessionCookieName, sessionCookieOptions } = require('../dist/auth/session.config.js');
 const secret = 'a-secure-development-only-secret-for-tests-1234';
 const config = { get: key => ({SESSION_SECRET:secret, NODE_ENV:'production'})[key] };
 const signature = (ip, ua) => requestSignature({ ip, get: () => ua }, secret);
+const signatures = (ip, ua) => requestBinding({ip,get: () => ua}, secret);
 
 function dispatch({ ip, agent, stored, authenticated = true, destroyFailure = null }) {
   let destroyed = false, cleared = false, nextCalled = false, error = null;
@@ -13,14 +15,15 @@ function dispatch({ ip, agent, stored, authenticated = true, destroyFailure = nu
     ip, get: () => agent,
     session: {
       ...(authenticated ? {userId:'user-123'} : {}),
-      ...(stored ? {clientSignature:stored} : {}),
+      ...(stored ? (typeof stored === 'string' ? {clientSignature:stored} : stored) : {}),
       destroy(cb) { destroyed = true; cb(destroyFailure); },
     },
   };
   const res = {
     statusCode: null, body:null,
     clearCookie(name, options) {
-      assert.equal(name, 'ayu.sid');
+      assert.equal(name, '__Host-ayu.sid');
+      assert.equal(options.partitioned,true);
       assert.equal(options.secure, true);
       cleared = true;
     },
@@ -37,14 +40,14 @@ test('same IP and device signature is accepted', () => {
   assert.equal(result.destroyed,false);
 });
 test('changed IP destroys session and sends 401', () => {
-  const stored = signature('198.51.100.10','Browser A');
+  const stored = signatures('198.51.100.10','Browser A');
   const result = dispatch({ip:'203.0.113.9',agent:'Browser A',stored});
   assert.equal(result.status,401);
   assert.equal(result.destroyed,true);
   assert.equal(result.cleared,true);
 });
 test('changed user agent destroys session and sends 401', () => {
-  const stored = signature('198.51.100.10','Browser A');
+  const stored = signatures('198.51.100.10','Browser A');
   const result = dispatch({ip:'198.51.100.10',agent:'Browser B',stored});
   assert.equal(result.status,401);
   assert.equal(result.destroyed,true);
@@ -68,4 +71,20 @@ test('failed session store revocation blocks request and forwards error', () => 
   assert.equal(result.nextCalled,true);
   assert.equal(result.error,err);
   assert.equal(result.status,null);
+});
+
+test('production cookie is host-only, secure and partitioned for cross-site Chrome', () => {
+  assert.equal(sessionCookieName(true), '__Host-ayu.sid');
+  assert.deepEqual(
+    [sessionCookieOptions(true).secure, sessionCookieOptions(true).partitioned, sessionCookieOptions(true).sameSite,sessionCookieOptions(true).httpOnly,sessionCookieOptions(true).path],
+    [true,true,'none',true,'/'],
+  );
+});
+test('development cookie remains lax and non-partitioned', () => {
+  assert.equal(sessionCookieName(false),'ayu.sid');
+  assert.equal(sessionCookieOptions(false).partitioned,false);
+  assert.equal(sessionCookieOptions(false).sameSite,'lax');
+});
+test('IPv4 and IPv4-mapped IPv6 produce the same signature', () => {
+  assert.equal(signature('198.51.100.10','Browser A'),signature('::ffff:198.51.100.10','Browser A'));
 });

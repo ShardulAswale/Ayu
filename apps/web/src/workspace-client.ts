@@ -32,6 +32,7 @@ export async function workspaceApi<T>(path: string, method = 'GET', data?: unkno
   const response = await fetch(root + '/workspace/' + path, {
     method,
     credentials: 'include',
+    cache: 'no-store',
     headers: changing ? {
       'content-type': 'application/json', 'x-ayu-csrf': csrf!,
     } : undefined,
