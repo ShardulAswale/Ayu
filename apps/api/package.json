@@ -6,7 +6,8 @@
     "build": "nest build",
     "start": "node dist/main.js",
     "dev": "nest start --watch",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:workspace": "node --test tests/workspace-access.test.mjs"
   },
   "dependencies": {
     "@nestjs/common": "^10.4.15",

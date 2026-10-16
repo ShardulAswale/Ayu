@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
 .ws-shell{display:flex;min-height:100vh;background:#f7f9f5;color:#213b32;font-family:Inter,"DM Sans",sans-serif;font-size:13px}
 .ws-shell *{box-sizing:border-box}
