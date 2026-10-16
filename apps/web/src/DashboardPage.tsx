@@ -108,6 +108,8 @@ export function DashboardPage() {
   const [editingWidgets, setEditingWidgets] = React.useState(false);
   const [recipeSearch, setRecipeSearch] = React.useState('');
   const [recipeEditing, setRecipeEditing] = React.useState('');
+  const [mealEditing, setMealEditing] = React.useState('');
+  const [planEditing, setPlanEditing] = React.useState('');
   const [calendarView, setCalendarView] = React.useState<'day' | 'week' | 'month'>('week');
   const [calendarDate, setCalendarDate] = React.useState(localDate(new Date()));
   const [formOpen, setFormOpen] = React.useState(false);
@@ -161,14 +163,14 @@ export function DashboardPage() {
     const range = '&from=' + encodeURIComponent(start.toISOString()) + '&to=' + encodeURIComponent(end.toISOString());
     try {
       const [stat, library, visits, patientList, team, layout, foods, scheduled, measures] = await Promise.all([
-        workspaceApi<WorkspaceStats>('stats'),
+        workspaceApi<WorkspaceStats>('stats?offset=' + new Date().getTimezoneOffset()),
         workspaceApi<Recipe[]>('recipes'),
         workspaceApi<Appointment[]>('appointments' + (hasPatientScope ? param : '')),
         isPatient ? Promise.resolve([] as PatientRef[]) : workspaceApi<PatientRef[]>('patients'),
         role === 'admin' ? workspaceApi<PatientRef[]>('dietitians') : Promise.resolve([] as PatientRef[]),
         isPatient ? Promise.resolve({ widgets: defaultWidgets }) : workspaceApi<{widgets: string[]}>('layout'),
-        hasPatientScope ? workspaceApi<FoodEntry[]>('entries' + (param || '?') + range.replace(/^&/, param ? '&' : '')) : Promise.resolve([] as FoodEntry[]),
-        hasPatientScope ? workspaceApi<PlanEntry[]>('plans' + (param || '?') + range.replace(/^&/, param ? '&' : '')) : Promise.resolve([] as PlanEntry[]),
+        hasPatientScope ? workspaceApi<FoodEntry[]>('entries' + (param || '?') + (param ? range : range.slice(1))) : Promise.resolve([] as FoodEntry[]),
+        hasPatientScope ? workspaceApi<PlanEntry[]>('plans' + (param || '?') + (param ? range : range.slice(1))) : Promise.resolve([] as PlanEntry[]),
         hasPatientScope ? workspaceApi<ProgressEntry[]>('progress' + param) : Promise.resolve([] as ProgressEntry[]),
       ]);
       setStats(stat); setRecipes(library); setAppointments(visits); setPatients(patientList);
@@ -245,16 +247,18 @@ export function DashboardPage() {
     {pageHeading('Time-ordered food log', staffMode ? "Patient's food diary" : 'Every bite, when it happens',
       staffMode ? 'View the selected patient’s entries in chronological order.' :
       'Log whenever you eat. No fixed breakfast, lunch or dinner slots.',
-      !staffMode && <button className="ws-primary" onClick={() => setFormOpen(!formOpen)}><Plus size={16}/> Add food</button>)}
+      !staffMode && <button className="ws-primary" onClick={() => { setMealEditing(''); setMeal({
+        foodName: '', eatenAt: localDateTime(new Date()), quantity: '1', unit: 'serving', recipeId: '', notes: '',
+      }); setFormOpen(!formOpen); }}><Plus size={16}/> Add food</button>)}
     {!staffMode && formOpen && <form className="ws-card ws-form" onSubmit={event => {
       event.preventDefault();
-      void mutate('Food entry saved.', () => workspaceApi('entries', 'POST', {
+      void mutate(mealEditing ? 'Food entry updated.' : 'Food entry saved.', () => workspaceApi(mealEditing ? 'entries/' + mealEditing : 'entries', mealEditing ? 'PATCH' : 'POST', {
         foodName: meal.foodName.trim(), eatenAt: new Date(meal.eatenAt).toISOString(),
         quantity: Number(meal.quantity), unit: meal.recipeId ? 'serving' : meal.unit,
         ...(meal.recipeId ? { recipeId: meal.recipeId } : {}), notes: meal.notes,
       }));
     }}>
-      <h2>Add food entry</h2><p>Record the time you actually ate. Category labels are optional.</p>
+      <h2>{mealEditing ? 'Edit food entry' : 'Add food entry'}</h2><p>Record the time you actually ate. Category labels are optional.</p>
       <div className="ws-form-grid">
         <label>Food name<input required maxLength={160} value={meal.foodName} onChange={e => setMeal({ ...meal, foodName: e.target.value })}/></label>
         <label>Date & time<input required type="datetime-local" value={meal.eatenAt} onChange={e => setMeal({ ...meal, eatenAt: e.target.value })}/></label>
@@ -269,7 +273,7 @@ export function DashboardPage() {
         </label>
         <label className="ws-wide">Notes<textarea maxLength={1000} value={meal.notes} onChange={e => setMeal({ ...meal, notes: e.target.value })}/></label>
       </div>
-      <div className="ws-form-actions"><button className="ws-primary" disabled={busy}>Save entry</button>
+      <div className="ws-form-actions"><button className="ws-primary" disabled={busy}>{mealEditing ? "Update entry" : "Save entry"}</button>
         <button type="button" className="ws-secondary" onClick={() => setFormOpen(false)}>Cancel</button></div>
     </form>}
     <div className="ws-card">
@@ -281,6 +285,14 @@ export function DashboardPage() {
             <span>{entry.quantity} {entry.unit} · {entry.recipeId
               ? int(entry.nutrition?.calories) + ' kcal per entry' : 'Nutrients not calculated'}</span>
             {entry.notes && <small>{entry.notes}</small>}</div>
+          {!staffMode && <button type="button" className="ws-secondary" onClick={() => {
+            setMealEditing(entry.id);
+            setMeal({
+              foodName:entry.foodName, eatenAt:localDateTime(new Date(entry.eatenAt)),
+              quantity:String(entry.quantity), unit:entry.unit, recipeId:entry.recipeId || '', notes:entry.notes || '',
+            });
+            setFormOpen(true);
+          }}>Edit</button>}
           {!staffMode && <button type="button" className="ws-icon-button" aria-label={'Delete ' + entry.foodName}
             onClick={() => { if (window.confirm('Delete this entry?')) void mutate('Entry deleted.', () => workspaceApi('entries/' + entry.id, 'DELETE')); }}><Trash2 size={16}/></button>}
         </article>)}</div>}
@@ -292,26 +304,31 @@ export function DashboardPage() {
       staffMode ? 'Diet plan builder' : 'My diet plan',
       staffMode ? 'Create and publish meal recommendations on a flexible calendar.' :
         'Read your dietitian’s published recommendations by day, week or month.',
-      staffMode && scopedPatient && <button className="ws-primary" onClick={() => setFormOpen(!formOpen)}><Plus size={16}/> Add recommendation</button>)}
+      staffMode && scopedPatient && <button className="ws-primary" onClick={() => {
+        setPlanEditing(''); setPlanForm({ title:'',plannedAt:localDateTime(new Date()),notes:'',status:'draft',recipeId:'' });
+        setFormOpen(!formOpen);
+      }}><Plus size={16}/> Add recommendation</button>)}
     {staffMode && !scopedPatient && <div className="ws-card">{choosePatient}<Empty title="No patient selected" description="Choose an assigned patient before editing their diet plan."/></div>}
     {staffMode && scopedPatient && formOpen && <form className="ws-card ws-form" onSubmit={event => {
       event.preventDefault();
-      void mutate('Recommendation saved.', () => workspaceApi('plans', 'POST', {
-        patientId: selectedPatient, title: planForm.title,
-        plannedAt: new Date(planForm.plannedAt).toISOString(), notes: planForm.notes,
-        status: planForm.status, ...(planForm.recipeId ? { recipeId: planForm.recipeId } : {}),
-      }));
+      void mutate(planEditing ? 'Recommendation updated.' : 'Recommendation saved.',
+        () => workspaceApi(planEditing ? 'plans/' + planEditing : 'plans', planEditing ? 'PATCH' : 'POST', {
+          ...(planEditing ? {} : {patientId: selectedPatient}),
+          title: planForm.title, plannedAt: new Date(planForm.plannedAt).toISOString(),
+          notes: planForm.notes, status: planForm.status,
+          ...(!planEditing && planForm.recipeId ? { recipeId: planForm.recipeId } : {}),
+        }));
     }}>
-      <h2>New recommendation for {selectedPatientName}</h2>
+      <h2>{planEditing ? 'Edit recommendation' : 'New recommendation'} for {selectedPatientName}</h2>
       <div className="ws-form-grid">
         <label>Recommended food<input required maxLength={160} value={planForm.title} onChange={e => setPlanForm({ ...planForm, title: e.target.value })}/></label>
         <label>Recommended date & time<input type="datetime-local" required value={planForm.plannedAt} onChange={e => setPlanForm({ ...planForm, plannedAt: e.target.value })}/></label>
-        <label>Related recipe<select value={planForm.recipeId} onChange={e => setPlanForm({ ...planForm, recipeId: e.target.value, title: recipes.find(r => r.id === e.target.value)?.name || planForm.title })}>
+        <label>Related recipe<select disabled={Boolean(planEditing)} value={planForm.recipeId} onChange={e => setPlanForm({ ...planForm, recipeId: e.target.value, title: recipes.find(r => r.id === e.target.value)?.name || planForm.title })}>
           <option value="">None</option>{recipes.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}</select></label>
         <label>Visibility<select value={planForm.status} onChange={e => setPlanForm({ ...planForm, status: e.target.value })}>
           <option value="draft">Draft (practitioners only)</option><option value="published">Publish to patient</option></select></label>
         <label className="ws-wide">Guidance<textarea maxLength={1000} value={planForm.notes} onChange={e => setPlanForm({ ...planForm, notes: e.target.value })}/></label>
-      </div><div className="ws-form-actions"><button disabled={busy} className="ws-primary">Save recommendation</button>
+      </div><div className="ws-form-actions"><button disabled={busy} className="ws-primary">{planEditing ? 'Update recommendation' : 'Save recommendation'}</button>
         <button className="ws-secondary" type="button" onClick={() => setFormOpen(false)}>Cancel</button></div>
     </form>}
     {scopedPatient && <>
@@ -337,6 +354,12 @@ export function DashboardPage() {
                   <strong>{item.title}</strong>
                   <em>{item.status}</em>
                   {staffMode && <div className="ws-inline-actions">
+                    <button type="button" onClick={() => {
+                      setPlanEditing(item.id);
+                      setPlanForm({ title:item.title, plannedAt:localDateTime(new Date(item.plannedAt)),
+                        notes:item.notes || '',status:item.status,recipeId:item.recipeId || '' });
+                      setFormOpen(true);
+                    }}>Edit</button>
                     {item.status === 'draft' && <button type="button" onClick={() => void mutate('Plan published.', () => workspaceApi('plans/' + item.id, 'PATCH', { status: 'published' }))}>Publish</button>}
                     <button type="button" aria-label="Delete recommendation" onClick={() => { if (window.confirm('Remove this recommendation?')) void mutate('Recommendation removed.', () => workspaceApi('plans/' + item.id,'DELETE')); }}>Remove</button>
                   </div>}
