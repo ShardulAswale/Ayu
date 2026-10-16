@@ -10,8 +10,8 @@ async function main() {
   const pepper = process.env.AUTH_PASSWORD_PEPPER;
   const password = process.env.AYU_DEMO_PASSWORD;
 
-  if (process.env.NODE_ENV === 'production') {
-    throw new Error('Refusing to seed with NODE_ENV=production.');
+  if (process.env.NODE_ENV !== 'development') {
+    throw new Error('Demo seeding requires NODE_ENV=development.');
   }
   if (process.env.AYU_DEMO_SEED_CONFIRM !== 'Ayu') {
     throw new Error('Set AYU_DEMO_SEED_CONFIRM=Ayu to acknowledge the target development database.');
