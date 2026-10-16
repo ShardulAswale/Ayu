@@ -184,21 +184,54 @@ export class WorkspaceController {
     if (Number.isNaN(date.getTime())) throw new BadRequestException('Invalid eating time');
     let nutrition = { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 };
     if (dto.recipeId) {
+      if (dto.unit !== 'serving') throw new BadRequestException('Recipe quantities must use serving units');
       const recipe = await this.collection('recipes').findOne({ _id: this.validId(dto.recipeId) });
       if (!recipe) throw new BadRequestException('Recipe not found');
       nutrition = {
-        calories: recipe.calories || 0, protein: recipe.protein || 0,
-        carbs: recipe.carbs || 0, fat: recipe.fat || 0, fiber: recipe.fiber || 0,
+        calories: (recipe.calories || 0) * dto.quantity,
+        protein: (recipe.protein || 0) * dto.quantity,
+        carbs: (recipe.carbs || 0) * dto.quantity,
+        fat: (recipe.fat || 0) * dto.quantity,
+        fiber: (recipe.fiber || 0) * dto.quantity,
       };
     }
     const result = await this.collection('entries').insertOne({
       patientId: oid(identity.id), foodName: dto.foodName.trim(),
       eatenAt: date, quantity: dto.quantity, unit: dto.unit.trim(),
       ...(dto.recipeId ? { recipeId: oid(dto.recipeId) } : {}),
-      notes: dto.notes || '', nutrition,
+      notes: dto.notes || '', nutrition, nutritionAvailable: Boolean(dto.recipeId),
       createdAt: new Date(), updatedAt: new Date(),
     });
     return { id: String(result.insertedId) };
+  }
+
+  @Patch('entries/:id')
+  @Roles('patient')
+  @UseGuards(CsrfGuard)
+  async editEntry(@Req() req: Request, @Param('id') id: string, @Body() dto: FoodEntryDto) {
+    let nutrition = { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 };
+    if (dto.recipeId) {
+      if (dto.unit !== 'serving') throw new BadRequestException('Recipe quantities must use serving units');
+      const recipe = await this.collection('recipes').findOne({ _id: this.validId(dto.recipeId) });
+      if (!recipe) throw new BadRequestException('Recipe not found');
+      nutrition = {
+        calories: (recipe.calories || 0) * dto.quantity,
+        protein: (recipe.protein || 0) * dto.quantity,
+        carbs: (recipe.carbs || 0) * dto.quantity,
+        fat: (recipe.fat || 0) * dto.quantity,
+        fiber: (recipe.fiber || 0) * dto.quantity,
+      };
+    }
+    const r = await this.collection('entries').updateOne({
+      _id: this.validId(id), patientId: oid(req.session.userId!),
+    }, { $set: {
+      foodName: dto.foodName.trim(), eatenAt: new Date(dto.eatenAt), quantity: dto.quantity,
+      unit: dto.unit, notes: dto.notes || '', nutrition,
+      recipeId: dto.recipeId ? oid(dto.recipeId) : null,
+      nutritionAvailable: Boolean(dto.recipeId), updatedAt: new Date(),
+    } });
+    if (!r.matchedCount) throw new NotFoundException();
+    return { ok: true };
   }
 
   @Delete('entries/:id')
@@ -275,7 +308,7 @@ export class WorkspaceController {
     let filter: Record<string, any>;
     if (identity.role === 'patient' || patient) {
       const patientId = await this.patientId(req, patient);
-      filter = { patientId };
+      filter = { patientId, ...(identity.role === 'dietitian' ? { dietitianId: oid(identity.id) } : {}) };
     } else if (identity.role === 'dietitian') {
       filter = { dietitianId: oid(identity.id) };
     } else {
@@ -360,10 +393,15 @@ export class WorkspaceController {
   }
 
   @Get('stats')
-  async stats(@Req() req: Request) {
+  async stats(@Req() req: Request, @Query('offset') offset?: string) {
     const user = await this.identity(req);
     const now = new Date();
-    const start = new Date(now); start.setHours(0, 0, 0, 0);
+    const minutes = offset === undefined ? 0 : Number(offset);
+    if (!Number.isInteger(minutes) || minutes < -840 || minutes > 840) {
+      throw new BadRequestException('Invalid timezone offset');
+    }
+    const localMs = now.getTime() - minutes * 60000;
+    const start = new Date(Math.floor(localMs / 86400000) * 86400000 + minutes * 60000);
     const end = new Date(start.getTime() + 86400000);
     if (user.role === 'patient') {
       const [entries, appointments, plans, progress] = await Promise.all([
