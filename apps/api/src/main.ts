@@ -11,6 +11,17 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const config = app.get(ConfigService);
   if (config.get<string>('NODE_ENV') === 'production') app.getHttpAdapter().getInstance().set('trust proxy', 1);
+  // Private patient and session endpoints must never be stored in HTTP caches.
+  // Disable entity tags to prevent accidental 304 responses to authenticated data.
+  app.getHttpAdapter().getInstance().disable('etag');
+  app.use((req: {path: string}, res: {setHeader: (name: string, value: string) => void}, next: () => void) => {
+    if (/^\/(auth|dashboard|workspace)(\/|$)/.test(req.path)) {
+      res.setHeader('Cache-Control', 'private, no-store, max-age=0');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+    }
+    next();
+  });
   app.use(helmet());
   app.use(sessionMiddleware(config));
   app.use(sessionBindingMiddleware(config));

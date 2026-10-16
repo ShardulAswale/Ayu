@@ -1,4 +1,4 @@
-import { getCsrf, SessionUser } from './auth-client';
+import { getCsrf, SessionExpiredError, SessionUser } from './auth-client';
 
 export interface WorkspaceStats {
   role: SessionUser['role'];
@@ -38,7 +38,7 @@ export async function workspaceApi<T>(path: string, method = 'GET', data?: unkno
     body: changing && data !== undefined ? JSON.stringify(data) : undefined,
   });
   if (!response.ok) {
-    if (response.status === 401) throw new Error('Your session expired. Sign in again.');
+    if (response.status === 401) throw new SessionExpiredError();
     if (response.status === 403) throw new Error('You do not have permission to access this resource.');
     const details = await response.json().catch(() => null) as { message?: string | string[] } | null;
     const info = Array.isArray(details?.message) ? details.message.join('; ') : details?.message;
