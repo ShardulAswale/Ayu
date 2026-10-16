@@ -123,8 +123,9 @@ The development frontend is in `apps/web` on the `dev` branch. Cloudflare builds
 
 The Cloudflare deployment serves the same React application for all browser paths using `wrangler.jsonc` with `assets.not_found_handling = "single-page-application"`.
 
-- `/login` — customer/patient sign-in (`patient` role).
-- `/admin` — dietitian and administrator sign-in (`dietitian` or `admin` role).
-- `/` — public landing page. Legacy `/#login` remains accepted.
+- `/login` — universal sign-in for all account roles. Existing sessions redirect automatically.
+- `/dashboard/admin` — admin dashboard; `/dashboard/dietitian` — dietitian dashboard; `/dashboard/patient` — patient dashboard. Each route verifies the current session and redirects to the canonical route for the verified role.
+- `/admin` — legacy redirect to `/login`; existing `/#login` and `/#dashboard` bookmarks remain accepted.
+- `/` — public landing page with a single Log in link and informational Sign up page.
 
-Build with `VITE_API_URL=https://ayu-sdli.onrender.com` set in the frontend build environment, then deploy from the repository root with `npx wrangler deploy --config wrangler.jsonc`. Verify that direct navigation and page refresh on both paths return the React app (not a 404). The frontend checks the role returned by `/auth/me` and `/auth/login`; this is navigation separation only, **not** authorization for protected resources. Every future staff/patient API endpoint must enforce its own server-side role and resource-access policies. Signup is not enabled.
+Build with `VITE_API_URL=https://ayu-sdli.onrender.com` set in the frontend build environment, then deploy from the repository root with `npx wrangler deploy --config wrangler.jsonc`. Verify that direct navigation and page refresh on both paths return the React app (not a 404). The frontend chooses the dashboard from the authenticated role returned by `/auth/me` and `/auth/login`, never from an email or user-selected role. Dashboard paths are UI routing only, **not** authorization for protected resources. Every future staff/patient API endpoint must enforce its own server-side role and resource-access policies. Signup is not enabled.
