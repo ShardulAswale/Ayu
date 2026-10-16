@@ -19,20 +19,26 @@ export function LoginPage() {
     let cancelled = false;
     (async () => {
       try {
-        const existing = await currentUser();
         const token = await getCsrf();
-        if (!cancelled) { setUser(existing); setCsrf(token); if (existing) window.location.replace(dashboardPathForRole(existing.role)); }
-      } catch { if (!cancelled) setError('Unable to connect to the authentication service.'); }
+        if (!cancelled) setCsrf(token);
+      } catch { if (!cancelled) setError('Could not initialize security verification. Try signing in again.'); }
+      try {
+        const existing = await currentUser();
+        if (!cancelled && existing) { setUser(existing); window.location.replace(dashboardPathForRole(existing.role)); }
+      } catch { /* A failed old-session check must not block a new login attempt. */ }
     })();
     return () => { cancelled = true; };
   }, [configured]);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
-    if (!csrf || busy) return;
+    if (busy) return;
     setBusy(true); setError('');
     try {
-      const result = await login(email.trim(), password, csrf);
+      // A fresh CSRF fetch also recovers from an expired anonymous session.
+      const token = await getCsrf();
+      setCsrf(token);
+      const result = await login(email.trim(), password, token);
       setUser(result.user); setCsrf(result.csrfToken); setPassword(''); window.location.replace(dashboardPathForRole(result.user.role));
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Sign-in failed.'); }
     finally { setBusy(false); }
@@ -63,7 +69,7 @@ export function LoginPage() {
       <input id="ayu-email" type="email" autoComplete="username" maxLength={254} required value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com"/>
       <label htmlFor="ayu-password">Password</label>
       <div className="ayu-password-field"><input id="ayu-password" type={visible ? 'text' : 'password'} autoComplete="current-password" required value={password} onChange={e => setPassword(e.target.value)} placeholder="Your password"/><button type="button" onClick={() => setVisible(v => !v)} aria-label={visible ? 'Hide password' : 'Show password'}>{visible ? <EyeOff size={17}/> : <Eye size={17}/>}</button></div>
-      <button className="ayu-login-submit" type="submit" disabled={!configured || !csrf || busy}>{busy ? 'Signing in…' : 'Sign in'}</button>
+      <button className="ayu-login-submit" type="submit" disabled={!configured || busy}>{busy ? 'Signing in…' : 'Sign in'}</button>
     </form>}
     <p className="ayu-login-note"><a href="/#signup">Sign up information</a></p>
   </div></main>;

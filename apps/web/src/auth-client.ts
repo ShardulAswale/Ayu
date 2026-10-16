@@ -1,11 +1,17 @@
 export interface SessionUser { id: string; email: string; role: 'admin' | 'dietitian' | 'patient' }
+export class SessionExpiredError extends Error {
+  constructor(message = 'Your session has expired. Please sign in again.') {
+    super(message);
+    this.name = 'SessionExpiredError';
+  }
+}
 const api = import.meta.env.VITE_API_URL?.replace(/\/$/, '') || '';
 function endpoint(path: string) {
   if (!api) throw new Error('Authentication API is not configured. Set VITE_API_URL at build time.');
   return api + path;
 }
 async function parseError(response: Response): Promise<never> {
-  if (response.status === 401) throw new Error('Invalid credentials or session expired.');
+  if (response.status === 401) throw new SessionExpiredError('Authentication failed or session expired.');
   if (response.status === 403) throw new Error('Security verification failed. Refresh and try again.');
   if (response.status === 429) throw new Error('Too many attempts. Please try again later.');
   throw new Error('Unable to complete the request. Please try again.');

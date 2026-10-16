@@ -5,7 +5,7 @@ import {
   LayoutDashboard, Leaf, Menu, MessageCircle, Plus, RefreshCw, Search,
   Settings, ShieldCheck, Trash2, Users, UtensilsCrossed, X,
 } from 'lucide-react';
-import { currentUser, getCsrf, logout, SessionUser } from './auth-client';
+import { currentUser, getCsrf, logout, SessionExpiredError, SessionUser } from './auth-client';
 import {
   Appointment, FoodEntry, PatientRef, PlanEntry, ProgressEntry, Recipe,
   WorkspaceStats, workspaceApi,
@@ -90,6 +90,7 @@ export function DashboardPage() {
   const [authLoading, setAuthLoading] = React.useState(true);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState('');
+  const [failedSections, setFailedSections] = React.useState<string[]>([]);
   const [notice, setNotice] = React.useState('');
   const [busy, setBusy] = React.useState(false);
   const [menuOpen, setMenuOpen] = React.useState(false);
@@ -162,7 +163,8 @@ export function DashboardPage() {
     const end = new Date(); end.setDate(end.getDate() + 180);
     const range = '&from=' + encodeURIComponent(start.toISOString()) + '&to=' + encodeURIComponent(end.toISOString());
     try {
-      const [stat, library, visits, patientList, team, layout, foods, scheduled, measures] = await Promise.all([
+      const keys = ['stats', 'recipes', 'appointments', 'patients', 'dietitians', 'layout', 'entries', 'plans', 'progress'] as const;
+      const results = await Promise.allSettled([
         workspaceApi<WorkspaceStats>('stats?offset=' + new Date().getTimezoneOffset()),
         workspaceApi<Recipe[]>('recipes'),
         workspaceApi<Appointment[]>('appointments' + (hasPatientScope ? param : '')),
@@ -173,10 +175,29 @@ export function DashboardPage() {
         hasPatientScope ? workspaceApi<PlanEntry[]>('plans' + (param || '?') + (param ? range : range.slice(1))) : Promise.resolve([] as PlanEntry[]),
         hasPatientScope ? workspaceApi<ProgressEntry[]>('progress' + param) : Promise.resolve([] as ProgressEntry[]),
       ]);
-      setStats(stat); setRecipes(library); setAppointments(visits); setPatients(patientList);
-      setDietitians(team); setWidgets(layout.widgets); setEntries(foods); setPlans(scheduled); setProgress(measures);
+      // A 401 must invalidate the complete dashboard, not expose partial patient data.
+      if (results.some(item => item.status === 'rejected' && item.reason instanceof SessionExpiredError)) {
+        setStats(null); setUser(null);
+        window.location.replace('/login');
+        return;
+      }
+      const failed = results.flatMap((item, index) => item.status === 'rejected' ? [keys[index]] : []);
+      const read = <T,>(index: number, fallback: T): T => {
+        const item = results[index];
+        return item.status === 'fulfilled' ? item.value as T : fallback;
+      };
+      setStats(read<WorkspaceStats | null>(0, null));
+      setRecipes(read<Recipe[]>(1, []));
+      setAppointments(read<Appointment[]>(2, []));
+      setPatients(read<PatientRef[]>(3, []));
+      setDietitians(read<PatientRef[]>(4, []));
+      setWidgets(read<{ widgets: string[] }>(5, {widgets: defaultWidgets}).widgets);
+      setEntries(read<FoodEntry[]>(6, []));
+      setPlans(read<PlanEntry[]>(7, []));
+      setProgress(read<ProgressEntry[]>(8, []));
+      setFailedSections(failed);
+      if (failed.length) setError('Unable to load: ' + failed.join(', ') + '. Other sections remain available.');
     } catch (cause) {
-      setStats(null);
       setError(cause instanceof Error ? cause.message : 'Data is unavailable. Retry to reconnect.');
     } finally {
       setLoading(false);
@@ -195,6 +216,7 @@ export function DashboardPage() {
       setNotice(message);
       setFormOpen(false);
     } catch (cause) {
+      if (cause instanceof SessionExpiredError) { window.location.replace('/login'); return; }
       setError(cause instanceof Error ? cause.message : 'Could not save changes.');
     } finally { setBusy(false); }
   };
@@ -583,8 +605,18 @@ export function DashboardPage() {
 
   const content = () => {
     if (loading) return <div className="ws-card" role="status">Loading your data…</div>;
-    if (!stats) return <div className="ws-card"><Empty title="Dashboard data unavailable" description={error || 'Please retry.'}/>
-      <button className="ws-primary" onClick={() => void reload(user,selectedPatient)}>Retry</button></div>;
+    const dependencies: Record<string, string[]> = {
+      home: isPatient ? ['stats', 'entries', 'appointments', 'plans'] : ['stats', 'appointments'],
+      'food-diary': ['entries'], 'my-diet-plan': ['plans'], 'nutrition-insights': ['stats'],
+      progress: ['progress'], appointments: ['appointments'], patients: ['patients'],
+      'patient-overview': ['patients', 'entries', 'plans', 'progress'],
+      'diet-plan-builder': ['patients', 'plans'], recipes: ['recipes'], reports: ['stats'],
+    };
+    const missing = (dependencies[validView] || []).filter(key => failedSections.includes(key));
+    if (missing.length || (validView === 'home' && !stats)) return <div className="ws-card">
+      <Empty title="Section data unavailable" description={'Could not load: ' + (missing.join(', ') || 'stats') + '. Please retry.'}/>
+      <button className="ws-primary" onClick={() => void reload(user,selectedPatient)}>Retry</button>
+    </div>;
     switch (validView) {
       case 'home': return homePage();
       case 'food-diary': return foodDiary(false);
