@@ -129,20 +129,3 @@ The Cloudflare deployment serves the same React application for all browser path
 - `/` — public landing page with a single Log in link and informational Sign up page.
 
 Build with `VITE_API_URL=https://ayu-sdli.onrender.com` set in the frontend build environment, then deploy from the repository root with `npx wrangler deploy --config wrangler.jsonc`. Verify that direct navigation and page refresh on both paths return the React app (not a 404). The frontend chooses the dashboard from the authenticated role returned by `/auth/me` and `/auth/login`, never from an email or user-selected role. Dashboard paths are UI routing only, **not** authorization for protected resources. Every future staff/patient API endpoint must enforce its own server-side role and resource-access policies. Signup is not enabled.
-
-## Synthetic development accounts
-
-Run the optional seed script to insert six **fictional** users into a **separate development MongoDB cluster**: one admin, two dietitians and three patients. Their email addresses end in `@example.com`; they have no clinical data. The script writes only the `Ayu.Users` collection using the API's exact `passwordHash` (HMAC-SHA256 + Argon2id), `role`, `active`, and `sessionVersion` fields. It skips existing email addresses and never resets existing passwords or accounts.
-
-From `apps/api`, install dependencies and set these environment variables locally (do **not** commit them):
-
-- `MONGODB_URI`: connection URI selecting `/Ayu` on your **development** MongoDB cluster.
-- `AUTH_PASSWORD_PEPPER`: the same secret configured on the development API (at least 32 characters).
-- `AYU_DEMO_PASSWORD`: a unique development-only password (at least 12 characters) shared by the six synthetic accounts; do not reuse real credentials.
-- `AYU_DEMO_SEED_CONFIRM=Ayu`: explicit opt-in.
-- `AYU_DEMO_SEED_CONFIRM_HOST`: a distinctive hostname fragment of the **development** cluster, used as an additional target check.
-- `NODE_ENV=development` (required); other environments are blocked.
-
-Run `npm run seed:demo` in `apps/api`. Run `npm run test:seed` to validate the fixture without connecting to MongoDB. The script prints created/skipped emails but never prints passwords or the pepper. Re-running it is safe for existing accounts. **Do not seed the Render production database or any database containing actual patient information.**
-
-All six demo accounts use the unified `/login` route. After authentication, the app sends administrators to `/dashboard/admin`, dietitians to `/dashboard/dietitian`, and patients to `/dashboard/patient`. Accounts work only against the API connected to the database you seeded, and only when its pepper matches.
