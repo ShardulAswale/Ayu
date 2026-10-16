@@ -140,7 +140,7 @@ From `apps/api`, install dependencies and set these environment variables locall
 - `AYU_DEMO_PASSWORD`: a unique development-only password (at least 12 characters) shared by the six synthetic accounts; do not reuse real credentials.
 - `AYU_DEMO_SEED_CONFIRM=Ayu`: explicit opt-in.
 - `AYU_DEMO_SEED_CONFIRM_HOST`: a distinctive hostname fragment of the **development** cluster, used as an additional target check.
-- `NODE_ENV=development` (or unset); production mode is blocked.
+- `NODE_ENV=development` (required); other environments are blocked.
 
 Run `npm run seed:demo` in `apps/api`. Run `npm run test:seed` to validate the fixture without connecting to MongoDB. The script prints created/skipped emails but never prints passwords or the pepper. Re-running it is safe for existing accounts. **Do not seed the Render production database or any database containing actual patient information.**
 
