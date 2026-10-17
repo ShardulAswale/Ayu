@@ -26,7 +26,8 @@
     "argon2": "^0.41.1",
     "express-session": "^1.18.1",
     "connect-mongo": "^5.1.0",
-    "@nestjs/throttler": "^6.7.1"
+    "@nestjs/throttler": "^6.7.1",
+    "@nestjs/swagger": "^12.0.2"
   },
   "devDependencies": {
     "@nestjs/cli": "^12.0.8",

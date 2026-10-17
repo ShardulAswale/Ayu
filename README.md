@@ -129,3 +129,15 @@ The Cloudflare deployment serves the same React application for all browser path
 - `/` — public landing page with a single Log in link and informational Sign up page.
 
 Build with `VITE_API_URL=https://ayu-sdli.onrender.com` set in the frontend build environment, then deploy from the repository root with `npx wrangler deploy --config wrangler.jsonc`. Verify that direct navigation and page refresh on both paths return the React app (not a 404). The frontend chooses the dashboard from the authenticated role returned by `/auth/me` and `/auth/login`, never from an email or user-selected role. Dashboard paths are UI routing only, **not** authorization for protected resources. Every future staff/patient API endpoint must enforce its own server-side role and resource-access policies. Signup is not enabled.
+
+## API documentation (Swagger/OpenAPI)
+
+The NestJS API serves Swagger UI at `/api/docs` and an OpenAPI JSON document at `/api/docs-json`.
+
+- **Local development:** Start the API with `npm install && npm run dev` in `apps/api`, then open `http://localhost:3000/api/docs`.
+- **Production:** The documentation endpoints are **disabled by default**. Set `SWAGGER_ENABLED=true` on the API service to opt in explicitly. This exposes API metadata publicly; do not enable on a sensitive deployment without appropriate access controls.
+- Set `SWAGGER_ENABLED=false` to disable the documentation in any environment.
+
+### Trying authenticated operations
+
+Ayu uses a server-side, HttpOnly session cookie rather than a bearer JWT. Request `GET /auth/csrf`, then submit `POST /auth/login` with the returned `x-ayu-csrf` token. The login response returns a fresh CSRF token. For subsequent mutating `POST`, `PUT`, `PATCH` and `DELETE` requests, supply that fresh token as `x-ayu-csrf`. Swagger UI sends browser cookies automatically on same-origin requests. Role and patient-assignment checks still apply. Never put passwords, tokens, session cookies or patient data in shared OpenAPI examples.
