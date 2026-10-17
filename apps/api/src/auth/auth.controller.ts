@@ -41,7 +41,7 @@ export class AuthController {
     await new Promise<void>((resolve, reject) => req.session.regenerate(err => err ? reject(err) : resolve()));
     req.session.userId = user.id as string;
     req.session.sessionVersion = user.sessionVersion;
-    const binding = requestBinding(req, this.config.getOrThrow<string>('SESSION_SECRET'));
+    const binding = requestBinding(req, this.config.getOrThrow<string>('SESSION_SECRET'), this.config.get<string>('RENDER') === 'true');
     req.session.clientSignature = binding.clientSignature;
     req.session.clientIpSignature = binding.clientIpSignature;
     req.session.clientAgentSignature = binding.clientAgentSignature;

@@ -6,13 +6,21 @@ import type { ConfigService } from '@nestjs/config';
 
 /**
  * Binds a logged-in session to the client network address and User-Agent string.
- * req.ip MUST be resolved by Express after a correctly configured trusted proxy.
- * Never use a raw X-Forwarded-For or client-submitted "device" header.
+ * On Render, trust only Cloudflare's overwritten CF-Connecting-IP header.
+ * Elsewhere, use Express-resolved req.ip. Never trust raw X-Forwarded-For.
  */
-function resolvedClientIp(req: Request): string {
-  const ip = req.ip?.trim();
-  if (!ip) throw new Error('Client IP unavailable');
-  // Render may expose the same IPv4 address in an IPv4-mapped IPv6 format.
+/**
+ * Render routes onrender.com traffic through Cloudflare. Its sanitized
+ * CF-Connecting-IP identifies the actual browser, unlike Express req.ip,
+ * which can be an intermediate proxy when Render uses different hop counts.
+ * Fail closed if the trusted edge header is unavailable; never trust an
+ * arbitrary leftmost X-Forwarded-For value for session security.
+ */
+export function resolvedClientIp(req: Request, onRender = process.env.RENDER === 'true'): string {
+  const forwarded = onRender ? req.get('cf-connecting-ip')?.trim() : undefined;
+  const ip = onRender ? forwarded : req.ip?.trim();
+  if (!ip || !isIP(ip)) throw new Error('Trusted client IP unavailable');
+  // Normalize equivalent IPv4 and IPv4-mapped IPv6 representations.
   if (ip.startsWith('::ffff:') && isIP(ip.slice(7)) === 4) return ip.slice(7);
   return ip;
 }
@@ -21,8 +29,8 @@ function fingerprint(secret: string, context: string, value: string): string {
   return createHmac('sha256', secret).update(context).update('\\0').update(value).digest('hex');
 }
 
-export function requestBinding(req: Request, secret: string) {
-  const ip = resolvedClientIp(req);
+export function requestBinding(req: Request, secret: string, onRender = process.env.RENDER === 'true') {
+  const ip = resolvedClientIp(req, onRender);
   const agent = req.get('user-agent') ?? '';
   return {
     clientSignature: fingerprint(secret, 'ayu-session-v2-combined', ip + '\\0' + agent),
@@ -49,7 +57,7 @@ export function sessionBindingMiddleware(config: ConfigService): RequestHandler 
     if (!req.session?.userId) return next();
     let binding: ReturnType<typeof requestBinding>;
     try {
-      binding = requestBinding(req, secret);
+      binding = requestBinding(req, secret, config.get<string>('RENDER') === 'true');
     } catch {
       // Do not permit authenticated requests without a reliable client IP.
       return revoke('ip_unavailable');

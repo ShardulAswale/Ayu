@@ -9,10 +9,10 @@ const config = { get: key => ({SESSION_SECRET:secret, NODE_ENV:'production'})[ke
 const signature = (ip, ua) => requestSignature({ ip, get: () => ua }, secret);
 const signatures = (ip, ua) => requestBinding({ip,get: () => ua}, secret);
 
-function dispatch({ ip, agent, stored, authenticated = true, destroyFailure = null }) {
+function dispatch({ ip, agent, stored, authenticated = true, destroyFailure = null, onRender = false, cfIp }) {
   let destroyed = false, cleared = false, nextCalled = false, error = null;
   const req = {
-    ip, get: () => agent,
+    ip, get: header => header === 'cf-connecting-ip' ? cfIp : agent,
     session: {
       ...(authenticated ? {userId:'user-123'} : {}),
       ...(stored ? (typeof stored === 'string' ? {clientSignature:stored} : stored) : {}),
@@ -30,7 +30,8 @@ function dispatch({ ip, agent, stored, authenticated = true, destroyFailure = nu
     status(code) { this.statusCode = code; return this; },
     json(body) { this.body = body; return this; },
   };
-  sessionBindingMiddleware(config)(req, res, err => {nextCalled = true; error = err;});
+  const environment = { get: key => key === 'RENDER' ? (onRender ? 'true' : undefined) : config.get(key) };
+  sessionBindingMiddleware(environment)(req, res, err => {nextCalled = true; error = err;});
   return { destroyed, cleared, nextCalled, error, status: res.statusCode, body:res.body };
 }
 test('same IP and device signature is accepted', () => {
@@ -87,4 +88,36 @@ test('development cookie remains lax and non-partitioned', () => {
 });
 test('IPv4 and IPv4-mapped IPv6 produce the same signature', () => {
   assert.equal(signature('198.51.100.10','Browser A'),signature('::ffff:198.51.100.10','Browser A'));
+});
+
+test('Render proxy hop changes do not revoke a stable browser session', () => {
+  const req = {ip:'10.0.0.1',get:key=>key==='cf-connecting-ip'?'198.51.100.10':'Browser A'};
+  const stored=requestBinding(req,secret,true);
+  const result=dispatch({ip:'10.9.8.7',agent:'Browser A',cfIp:'198.51.100.10',stored,onRender:true});
+  assert.equal(result.nextCalled,true);
+  assert.equal(result.destroyed,false);
+});
+
+test('Render real client IP changes immediately revoke the browser session', () => {
+  const req={ip:'10.0.0.1',get:key=>key==='cf-connecting-ip'?'198.51.100.10':'Browser A'};
+  const stored=requestBinding(req,secret,true);
+  const result=dispatch({ip:'10.0.0.1',agent:'Browser A',cfIp:'203.0.113.9',stored,onRender:true});
+  assert.equal(result.status,401);
+  assert.equal(result.destroyed,true);
+});
+
+test('Render user-agent change immediately revokes the browser session', () => {
+  const req={ip:'10.0.0.1',get:key=>key==='cf-connecting-ip'?'198.51.100.10':'Browser A'};
+  const stored=requestBinding(req,secret,true);
+  const result=dispatch({ip:'10.0.0.1',agent:'Browser B',cfIp:'198.51.100.10',stored,onRender:true});
+  assert.equal(result.status,401);
+  assert.equal(result.destroyed,true);
+});
+
+test('Render missing verified edge header fails closed on existing sessions', () => {
+  const req={ip:'10.0.0.1',get:key=>key==='cf-connecting-ip'?'198.51.100.10':'Browser A'};
+  const stored=requestBinding(req,secret,true);
+  const result=dispatch({ip:'10.0.0.1',agent:'Browser A',stored,onRender:true});
+  assert.equal(result.status,401);
+  assert.equal(result.destroyed,true);
 });
