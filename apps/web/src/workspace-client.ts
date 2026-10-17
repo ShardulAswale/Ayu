@@ -6,7 +6,7 @@ export interface WorkspaceStats {
 }
 export interface PatientRef { id: string; email: string }
 export interface Recipe {
-  id: string; name: string; ingredients: string; instructions?: string; source?: string; allergens?: string;
+  id: string; name: string; ingredients: unknown; instructions?: unknown; source?: unknown; allergens?: unknown;
   calories: number; protein: number; carbs: number; fat: number; fiber: number;
 }
 export interface FoodEntry {
