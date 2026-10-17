@@ -1,4 +1,4 @@
-import { ApiTags } from '@nestjs/swagger';
+import { ApiTags, ApiCookieAuth, ApiSecurity } from '@nestjs/swagger';
 import {
   BadRequestException, Body, Controller, Delete, ForbiddenException, Get,
   Injectable, NotFoundException, Param, Patch, Post, Put, Query, Req, UseGuards,
@@ -31,6 +31,7 @@ const out = (doc: Record<string, any>) => {
 
 @Injectable()
 @ApiTags('Workspace')
+@ApiCookieAuth()
 @Controller('workspace')
 @Roles('admin', 'dietitian', 'patient')
 @UseGuards(RolesGuard)
@@ -113,6 +114,7 @@ export class WorkspaceController {
     return records.map(r => ({ id: String(r._id), email: r.email }));
   }
 
+  @ApiSecurity('csrf')
   @Post('assignments')
   @Roles('admin')
   @UseGuards(CsrfGuard)
@@ -135,6 +137,7 @@ export class WorkspaceController {
     return (await this.collection('recipes').find({}).sort({ name: 1 }).limit(250).toArray()).map(out);
   }
 
+  @ApiSecurity('csrf')
   @Post('recipes')
   @Roles('admin', 'dietitian')
   @UseGuards(CsrfGuard)
@@ -147,6 +150,7 @@ export class WorkspaceController {
     return { id: String(result.insertedId) };
   }
 
+  @ApiSecurity('csrf')
   @Patch('recipes/:id')
   @Roles('admin', 'dietitian')
   @UseGuards(CsrfGuard)
@@ -159,6 +163,7 @@ export class WorkspaceController {
     return { ok: true };
   }
 
+  @ApiSecurity('csrf')
   @Delete('recipes/:id')
   @Roles('admin', 'dietitian')
   @UseGuards(CsrfGuard)
@@ -177,6 +182,7 @@ export class WorkspaceController {
     }).sort({ eatenAt: -1 }).limit(250).toArray()).map(out);
   }
 
+  @ApiSecurity('csrf')
   @Post('entries')
   @Roles('patient')
   @UseGuards(CsrfGuard)
@@ -207,6 +213,7 @@ export class WorkspaceController {
     return { id: String(result.insertedId) };
   }
 
+  @ApiSecurity('csrf')
   @Patch('entries/:id')
   @Roles('patient')
   @UseGuards(CsrfGuard)
@@ -236,6 +243,7 @@ export class WorkspaceController {
     return { ok: true };
   }
 
+  @ApiSecurity('csrf')
   @Delete('entries/:id')
   @Roles('patient')
   @UseGuards(CsrfGuard)
@@ -258,6 +266,7 @@ export class WorkspaceController {
     return records.map(out);
   }
 
+  @ApiSecurity('csrf')
   @Post('plans')
   @Roles('admin', 'dietitian')
   @UseGuards(CsrfGuard)
@@ -276,6 +285,7 @@ export class WorkspaceController {
     return { id: String(result.insertedId) };
   }
 
+  @ApiSecurity('csrf')
   @Patch('plans/:id')
   @Roles('admin', 'dietitian')
   @UseGuards(CsrfGuard)
@@ -292,6 +302,7 @@ export class WorkspaceController {
     return { ok: true };
   }
 
+  @ApiSecurity('csrf')
   @Delete('plans/:id')
   @Roles('admin', 'dietitian')
   @UseGuards(CsrfGuard)
@@ -319,6 +330,7 @@ export class WorkspaceController {
     return (await this.collection('appointments').find(filter).sort({ startsAt: 1 }).limit(250).toArray()).map(out);
   }
 
+  @ApiSecurity('csrf')
   @Post('appointments')
   @Roles('admin', 'dietitian')
   @UseGuards(CsrfGuard)
@@ -338,6 +350,7 @@ export class WorkspaceController {
     return { id: String(result.insertedId) };
   }
 
+  @ApiSecurity('csrf')
   @Delete('appointments/:id')
   @Roles('admin', 'dietitian')
   @UseGuards(CsrfGuard)
@@ -358,6 +371,7 @@ export class WorkspaceController {
       .sort({ measuredAt: -1 }).limit(100).toArray()).map(out);
   }
 
+  @ApiSecurity('csrf')
   @Post('progress')
   @Roles('patient')
   @UseGuards(CsrfGuard)
@@ -377,6 +391,7 @@ export class WorkspaceController {
     return { widgets: layout?.widgets || [...VALID_WIDGETS] };
   }
 
+  @ApiSecurity('csrf')
   @Put('layout')
   @Roles('admin', 'dietitian')
   @UseGuards(CsrfGuard)
