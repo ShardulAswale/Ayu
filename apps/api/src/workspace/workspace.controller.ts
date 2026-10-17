@@ -1,3 +1,4 @@
+import { ApiTags } from '@nestjs/swagger';
 import {
   BadRequestException, Body, Controller, Delete, ForbiddenException, Get,
   Injectable, NotFoundException, Param, Patch, Post, Put, Query, Req, UseGuards,
@@ -29,6 +30,7 @@ const out = (doc: Record<string, any>) => {
 };
 
 @Injectable()
+@ApiTags('Workspace')
 @Controller('workspace')
 @Roles('admin', 'dietitian', 'patient')
 @UseGuards(RolesGuard)
