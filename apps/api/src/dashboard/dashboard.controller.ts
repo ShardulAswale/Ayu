@@ -1,4 +1,4 @@
-import { ApiTags } from '@nestjs/swagger';
+import { ApiTags, ApiCookieAuth, ApiSecurity } from '@nestjs/swagger';
 import { Controller, Get, Req, UseGuards } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
@@ -11,6 +11,7 @@ type DashboardMetric = { key: string; label: string; count: number; description:
 type DashboardSection = { key: string; title: string; description: string; items: never[] };
 
 @ApiTags('Dashboard')
+@ApiCookieAuth()
 @Controller('dashboard')
 @UseGuards(RolesGuard)
 export class DashboardController {
