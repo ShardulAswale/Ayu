@@ -432,7 +432,7 @@ export function DashboardPage() {
       {recipes.length === 0 ? <Empty title="0 recipes" description="The library is empty. Practitioners can add verified recipes and nutritional details." icon={BookOpen}/> :
         <div className="ws-table-wrap"><table className="ws-table"><thead><tr><th>Food / recipe</th><th>Calories</th><th>Protein</th><th>Carbs</th><th>Fat</th><th>Fiber</th>{isStaff && <th>Actions</th>}</tr></thead>
           <tbody>{recipes.filter(r => (r.name + ' ' + formatRecipeIngredients(r.ingredients)).toLowerCase().includes(recipeSearch.toLowerCase())).map(recipe =>
-            <tr key={recipe.id}><td><strong>{recipe.name}</strong><small>{formatRecipeIngredients(recipe.ingredients)}</small>{recipe.allergens && <small>Allergens: {displayText(recipe.allergens)}</small>}</td>
+            <tr key={recipe.id}><td><strong>{recipe.name}</strong><small>{formatRecipeIngredients(recipe.ingredients)}</small>{Boolean(recipe.allergens) && <small>Allergens: {displayText(recipe.allergens)}</small>}</td>
               <td>{int(recipe.calories)} kcal</td><td>{int(recipe.protein)} g</td><td>{int(recipe.carbs)} g</td><td>{int(recipe.fat)} g</td><td>{int(recipe.fiber)} g</td>
               {isStaff && <td><div className="ws-inline-actions">
                 <button type="button" onClick={() => { setRecipeEditing(recipe.id); setRecipeForm({
