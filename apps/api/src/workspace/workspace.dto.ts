@@ -1,3 +1,4 @@
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsArray, IsDateString, IsIn, IsInt, IsMongoId, IsNumber, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 
 export class FoodEntryDto {
@@ -47,6 +48,7 @@ export class AssignmentDto {
 }
 export class LayoutDto {
   @IsArray() @IsString({ each: true }) @MaxLength(64, { each: true })
+  @ApiProperty({ type: [String] })
   widgets!: string[];
 }
 export class ProgressDto {
