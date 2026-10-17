@@ -11,6 +11,7 @@ import {
   WorkspaceStats, workspaceApi,
 } from './workspace-client';
 import { dashboardPathForRole } from './role-routing.mjs';
+import { formatRecipeIngredients, displayText } from './recipe-format.mjs';
 import './workspace.css';
 
 type DashboardRole = SessionUser['role'];
@@ -430,14 +431,14 @@ export function DashboardPage() {
         <span>{recipes.length} entries</span></div>
       {recipes.length === 0 ? <Empty title="0 recipes" description="The library is empty. Practitioners can add verified recipes and nutritional details." icon={BookOpen}/> :
         <div className="ws-table-wrap"><table className="ws-table"><thead><tr><th>Food / recipe</th><th>Calories</th><th>Protein</th><th>Carbs</th><th>Fat</th><th>Fiber</th>{isStaff && <th>Actions</th>}</tr></thead>
-          <tbody>{recipes.filter(r => (r.name + ' ' + r.ingredients).toLowerCase().includes(recipeSearch.toLowerCase())).map(recipe =>
-            <tr key={recipe.id}><td><strong>{recipe.name}</strong><small>{recipe.ingredients}</small>{recipe.allergens && <small>Allergens: {recipe.allergens}</small>}</td>
+          <tbody>{recipes.filter(r => (r.name + ' ' + formatRecipeIngredients(r.ingredients)).toLowerCase().includes(recipeSearch.toLowerCase())).map(recipe =>
+            <tr key={recipe.id}><td><strong>{recipe.name}</strong><small>{formatRecipeIngredients(recipe.ingredients)}</small>{recipe.allergens && <small>Allergens: {displayText(recipe.allergens)}</small>}</td>
               <td>{int(recipe.calories)} kcal</td><td>{int(recipe.protein)} g</td><td>{int(recipe.carbs)} g</td><td>{int(recipe.fat)} g</td><td>{int(recipe.fiber)} g</td>
               {isStaff && <td><div className="ws-inline-actions">
                 <button type="button" onClick={() => { setRecipeEditing(recipe.id); setRecipeForm({
-                  name:recipe.name,ingredients:recipe.ingredients,instructions:recipe.instructions || '',
+                  name:recipe.name,ingredients:formatRecipeIngredients(recipe.ingredients),instructions:displayText(recipe.instructions),
                   calories:String(recipe.calories),protein:String(recipe.protein),carbs:String(recipe.carbs),
-                  fat:String(recipe.fat),fiber:String(recipe.fiber),allergens:recipe.allergens || '',source:recipe.source || '',
+                  fat:String(recipe.fat),fiber:String(recipe.fiber),allergens:displayText(recipe.allergens),source:displayText(recipe.source),
                 });setFormOpen(true); }}>Edit</button>
                 <button type="button" onClick={() => { if (window.confirm('Delete recipe? Existing food entries keep their recorded snapshot.')) void mutate('Recipe removed.', () => workspaceApi('recipes/' + recipe.id,'DELETE')); }}>Remove</button>
               </div></td>}

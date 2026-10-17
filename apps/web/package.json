@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "test:routing": "node --test tests/role-routing.test.mjs"
+    "test:routing": "node --test tests/role-routing.test.mjs",
+    "test:recipes": "node --test tests/recipe-format.test.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",
