@@ -2,49 +2,49 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsArray, IsDateString, IsIn, IsInt, IsMongoId, IsNumber, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 
 export class FoodEntryDto {
-  @IsString() @MaxLength(160) foodName!: string;
-  @IsDateString() eatenAt!: string;
-  @IsNumber() @Min(0.01) @Max(100000) quantity!: number;
-  @IsString() @MaxLength(36) unit!: string;
-  @IsOptional() @IsMongoId() recipeId?: string;
-  @IsOptional() @IsString() @MaxLength(1000) notes?: string;
+  @ApiProperty({}) @IsString() @MaxLength(160) foodName!: string;
+  @ApiProperty({}) @IsDateString() eatenAt!: string;
+  @ApiProperty({ type: Number }) @IsNumber() @Min(0.01) @Max(100000) quantity!: number;
+  @ApiProperty({}) @IsString() @MaxLength(36) unit!: string;
+  @ApiPropertyOptional({}) @IsOptional() @IsMongoId() recipeId?: string;
+  @ApiPropertyOptional({}) @IsOptional() @IsString() @MaxLength(1000) notes?: string;
 }
 export class RecipeDto {
-  @IsString() @MaxLength(160) name!: string;
-  @IsString() @MaxLength(5000) ingredients!: string;
-  @IsNumber() @Min(0) @Max(100000) calories!: number;
-  @IsNumber() @Min(0) @Max(10000) protein!: number;
-  @IsNumber() @Min(0) @Max(10000) carbs!: number;
-  @IsNumber() @Min(0) @Max(10000) fat!: number;
-  @IsNumber() @Min(0) @Max(10000) fiber!: number;
-  @IsOptional() @IsString() @MaxLength(500) allergens?: string;
-  @IsOptional() @IsString() @MaxLength(400) source?: string;
-  @IsOptional() @IsString() @MaxLength(3000) instructions?: string;
+  @ApiProperty({}) @IsString() @MaxLength(160) name!: string;
+  @ApiProperty({}) @IsString() @MaxLength(5000) ingredients!: string;
+  @ApiProperty({ type: Number }) @IsNumber() @Min(0) @Max(100000) calories!: number;
+  @ApiProperty({ type: Number }) @IsNumber() @Min(0) @Max(10000) protein!: number;
+  @ApiProperty({ type: Number }) @IsNumber() @Min(0) @Max(10000) carbs!: number;
+  @ApiProperty({ type: Number }) @IsNumber() @Min(0) @Max(10000) fat!: number;
+  @ApiProperty({ type: Number }) @IsNumber() @Min(0) @Max(10000) fiber!: number;
+  @ApiPropertyOptional({}) @IsOptional() @IsString() @MaxLength(500) allergens?: string;
+  @ApiPropertyOptional({}) @IsOptional() @IsString() @MaxLength(400) source?: string;
+  @ApiPropertyOptional({}) @IsOptional() @IsString() @MaxLength(3000) instructions?: string;
 }
 export class PlanEntryDto {
-  @IsMongoId() patientId!: string;
-  @IsString() @MaxLength(160) title!: string;
-  @IsDateString() plannedAt!: string;
-  @IsOptional() @IsMongoId() recipeId?: string;
-  @IsOptional() @IsString() @MaxLength(1000) notes?: string;
-  @IsIn(['draft', 'published']) status!: 'draft' | 'published';
+  @ApiProperty({}) @IsMongoId() patientId!: string;
+  @ApiProperty({}) @IsString() @MaxLength(160) title!: string;
+  @ApiProperty({}) @IsDateString() plannedAt!: string;
+  @ApiPropertyOptional({}) @IsOptional() @IsMongoId() recipeId?: string;
+  @ApiPropertyOptional({}) @IsOptional() @IsString() @MaxLength(1000) notes?: string;
+  @ApiProperty({ enum: ['draft', 'published'] }) @IsIn(['draft', 'published']) status!: 'draft' | 'published';
 }
 export class PlanEditDto {
-  @IsOptional() @IsString() @MaxLength(160) title?: string;
-  @IsOptional() @IsDateString() plannedAt?: string;
-  @IsOptional() @IsString() @MaxLength(1000) notes?: string;
-  @IsOptional() @IsIn(['draft', 'published']) status?: 'draft' | 'published';
+  @ApiPropertyOptional({}) @IsOptional() @IsString() @MaxLength(160) title?: string;
+  @ApiPropertyOptional({}) @IsOptional() @IsDateString() plannedAt?: string;
+  @ApiPropertyOptional({}) @IsOptional() @IsString() @MaxLength(1000) notes?: string;
+  @ApiPropertyOptional({ enum: ['draft', 'published'] }) @IsOptional() @IsIn(['draft', 'published']) status?: 'draft' | 'published';
 }
 export class AppointmentDto {
-  @IsMongoId() patientId!: string;
-  @IsMongoId() dietitianId!: string;
-  @IsDateString() startsAt!: string;
-  @IsString() @MaxLength(160) title!: string;
-  @IsInt() @Min(15) @Max(240) durationMinutes!: number;
+  @ApiProperty({}) @IsMongoId() patientId!: string;
+  @ApiProperty({}) @IsMongoId() dietitianId!: string;
+  @ApiProperty({}) @IsDateString() startsAt!: string;
+  @ApiProperty({}) @IsString() @MaxLength(160) title!: string;
+  @ApiProperty({ type: Number }) @IsInt() @Min(15) @Max(240) durationMinutes!: number;
 }
 export class AssignmentDto {
-  @IsMongoId() patientId!: string;
-  @IsMongoId() dietitianId!: string;
+  @ApiProperty({}) @IsMongoId() patientId!: string;
+  @ApiProperty({}) @IsMongoId() dietitianId!: string;
 }
 export class LayoutDto {
   @IsArray() @IsString({ each: true }) @MaxLength(64, { each: true })
@@ -52,8 +52,8 @@ export class LayoutDto {
   widgets!: string[];
 }
 export class ProgressDto {
-  @IsDateString() measuredAt!: string;
-  @IsString() @MaxLength(90) metric!: string;
-  @IsNumber() @Min(-1000000) @Max(1000000) value!: number;
-  @IsString() @MaxLength(20) unit!: string;
+  @ApiProperty({}) @IsDateString() measuredAt!: string;
+  @ApiProperty({}) @IsString() @MaxLength(90) metric!: string;
+  @ApiProperty({ type: Number }) @IsNumber() @Min(-1000000) @Max(1000000) value!: number;
+  @ApiProperty({}) @IsString() @MaxLength(20) unit!: string;
 }
