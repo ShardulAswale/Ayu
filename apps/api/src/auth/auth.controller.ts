@@ -1,4 +1,4 @@
-import { ApiTags } from '@nestjs/swagger';
+import { ApiTags, ApiSecurity } from '@nestjs/swagger';
 import { Body, Controller, Get, HttpCode, Post, Req, UseGuards, UnauthorizedException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
@@ -28,6 +28,7 @@ export class AuthController {
     return { csrfToken: req.session.csrfToken };
   }
 
+  @ApiSecurity('csrf')
   @Post('login')
   @HttpCode(200)
   @UseGuards(CsrfGuard, ThrottlerGuard)
@@ -57,6 +58,7 @@ export class AuthController {
     return { user: { id: String(user._id), email: user.email, role: user.role } };
   }
 
+  @ApiSecurity('csrf')
   @Post('logout')
   @HttpCode(204)
   @UseGuards(CsrfGuard)
