@@ -4,7 +4,7 @@ export interface WorkspaceStats {
   role: SessionUser['role'];
   values: Record<string, number>;
 }
-export interface PatientRef { id: string; email: string }
+export interface PatientRef { id: string; email: string; active: boolean }
 export interface Recipe {
   id: string; name: string; ingredients: unknown; instructions?: unknown; source?: unknown; allergens?: unknown;
   calories: number | null; protein: number | null; carbs: number | null; fat: number | null; fiber: number | null;
