@@ -18,6 +18,9 @@ export class User {
   @Prop({ default: true })
   active!: boolean;
 
+  @Prop({ type: Date })
+  deletedAt?: Date;
+
   @Prop({ default: 0 })
   sessionVersion!: number;
 }
