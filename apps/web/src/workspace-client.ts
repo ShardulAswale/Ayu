@@ -7,8 +7,17 @@ export interface WorkspaceStats {
 export interface PatientRef { id: string; email: string }
 export interface Recipe {
   id: string; name: string; ingredients: unknown; instructions?: unknown; source?: unknown; allergens?: unknown;
-  calories: number; protein: number; carbs: number; fat: number; fiber: number;
+  calories: number | null; protein: number | null; carbs: number | null; fat: number | null; fiber: number | null;
 }
+export interface CatalogTag { id: string; slug: string | null; label: string | null }
+export interface CatalogFood {
+  id: string; name: string; foodType: string | null;
+  category: CatalogTag | null; tags: CatalogTag[];
+  nutrients: { calories: number | null; protein: number | null; carbs: number | null; fat: number | null; fiber: number | null };
+  source: { canonicalFdcId: number | null; dataset: string | null };
+}
+export interface FoodCatalogPage { items: CatalogFood[]; total: number; page: number; pages: number; limit: number }
+
 export interface FoodEntry {
   id: string; foodName: string; eatenAt: string; quantity: number; unit: string;
   notes?: string; recipeId?: string;
