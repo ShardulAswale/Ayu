@@ -189,9 +189,18 @@ export class WorkspaceController {
       .map(doc => recipeForWorkspace(doc));
   }
 
+  @Get('food-tags')
+  async foodTags() {
+    const rows = await this.collection('tags').find({}, { projection: { slug: 1, label: 1, name: 1 } })
+      .sort({ label: 1 }).limit(1000).toArray();
+    return rows.map(row => ({ id: String(row._id), label: String(row.label || row.name || row.slug || ''), slug: row.slug || null }));
+  }
+
   @Get('foods')
   async foods(@Query('q') q?: string, @Query('page') pageRaw?: string,
-    @Query('limit') limitRaw?: string, @Query('categoryId') categoryId?: string) {
+    @Query('limit') limitRaw?: string, @Query('categoryId') categoryId?: string,
+    @Query('tagIds') tagIdsRaw?: string, @Query('tagLogic') tagLogic?: string,
+    @Query('sortBy') sortBy?: string, @Query('sortDir') sortDir?: string) {
     if (q !== undefined && (typeof q !== 'string' || q.length > 100)) {
       throw new BadRequestException('Search must be at most 100 characters');
     }
@@ -208,12 +217,30 @@ export class WorkspaceController {
       if (typeof categoryId !== 'string') throw new BadRequestException('Invalid category');
       filter.categoryId = this.validId(categoryId);
     }
+    // Filter and sort BEFORE pagination to keep results accurate across the entire catalogue.
+    const ids = tagIdsRaw ? tagIdsRaw.split(',').filter(Boolean) : [];
+    if (ids.length > 20 || ids.some(id => !Types.ObjectId.isValid(id)) ||
+      (tagLogic !== undefined && !['and', 'or'].includes(tagLogic))) {
+      throw new BadRequestException('Invalid tag filter');
+    }
+    if (ids.length) filter.tagIds = (tagLogic || 'or') === 'and'
+      ? { $all: ids.map(oid) } : { $in: ids.map(oid) };
+    const sortFields: Record<string, string> = {
+      name: 'name', foodType: 'foodType', category: 'categoryId',
+      calories: 'nutritionPer100g.calories', protein: 'nutritionPer100g.protein',
+      carbs: 'nutritionPer100g.carbs', fat: 'nutritionPer100g.fat',
+      fiber: 'nutritionPer100g.fiber',
+    };
+    if (sortBy && !sortFields[sortBy]) throw new BadRequestException('Invalid sort field');
+    if (sortDir && !['asc', 'desc'].includes(sortDir)) throw new BadRequestException('Invalid sort direction');
+    const order: 1 | -1 = sortDir === 'desc' ? -1 : 1;
+    const sort = { [sortFields[sortBy || 'name']]: order, _id: 1 as const };
     // Avoid sending embedded USDA variant arrays with search results.
     const [rows, total] = await Promise.all([
       this.collection('foods').find(filter, { projection: {
         name: 1, foodType: 1, categoryId: 1, tagIds: 1, nutritionPer100g: 1,
         portions: 1, 'source.canonicalFdcId': 1, 'source.dataset': 1,
-      } }).sort({ name: 1, _id: 1 }).skip((page - 1) * limit).limit(limit).toArray(),
+      } }).sort(sort).skip((page - 1) * limit).limit(limit).toArray(),
       this.collection('foods').countDocuments(filter),
     ]);
     const ids = [...new Set(rows.flatMap(row => [row.categoryId,
