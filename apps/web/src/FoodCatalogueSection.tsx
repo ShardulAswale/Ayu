@@ -63,7 +63,7 @@ export function FoodCatalogueSection() {
         <option value="">Select a tag…</option>{allTags.filter(t=>!selectedTags.includes(t.id)).map(t=><option key={t.id} value={t.id}>{t.label}</option>)}</select></label>
       <label>Match<select aria-label="Food tag match logic" value={tagLogic} onChange={e=>{setTagLogic(e.target.value as 'and'|'or');setPage(1);}}><option value="or">OR · any tag</option><option value="and">AND · all tags</option></select></label>
       <label>Sort by<select aria-label="Sort foods by" value={sortBy} onChange={e=>{setSortBy(e.target.value);setPage(1);}}>
-        {['name','foodType','category','calories','protein','carbs','fat','fiber'].map(t=><option key={t} value={t}>{t}</option>)}</select></label>
+        {['name','foodType','category','tags','dataset','calories','protein','carbs','fat','fiber'].map(t=><option key={t} value={t}>{t}</option>)}</select></label>
       <label>Order<select aria-label="Food sort direction" value={sortDir} onChange={e=>{setSortDir(e.target.value as 'asc'|'desc');setPage(1);}}><option value="asc">Ascending</option><option value="desc">Descending</option></select></label>
     </div>
     {selectedTags.length>0 && <div className="ws-catalogue-chips" aria-label="Selected food tags">{selectedTags.map(id=><button key={id} type="button" onClick={()=>{setSelectedTags(v=>v.filter(x=>x!==id));setPage(1);}}>{allTags.find(t=>t.id===id)?.label||id} ×</button>)}<button type="button" onClick={()=>{setSelectedTags([]);setPage(1);}}>Clear tags</button></div>}
