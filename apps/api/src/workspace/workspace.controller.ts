@@ -1,18 +1,19 @@
 import { ApiTags, ApiCookieAuth, ApiSecurity } from '@nestjs/swagger';
 import {
-  BadRequestException, Body, Controller, Delete, ForbiddenException, Get,
+  BadRequestException, Body, ConflictException, Controller, Delete, ForbiddenException, Get,
   Injectable, NotFoundException, Param, Patch, Post, Put, Query, Req, UseGuards,
 } from '@nestjs/common';
 import { InjectConnection, InjectModel } from '@nestjs/mongoose';
 import { Connection, Model, Types } from 'mongoose';
 import { Request } from 'express';
+import { PasswordService } from '../auth/password.service';
 import { foodForWorkspace, recipeForWorkspace, escapedSearch } from './catalogue.mapper';
 import { CsrfGuard } from '../auth/csrf.guard';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { User, UserRole } from '../auth/user.schema';
 import {
-  AppointmentDto, AssignmentDto, FoodEntryDto, LayoutDto, PlanEditDto,
+  AppointmentDto, AssignmentDto, CreatePatientDto, PatientStatusDto, FoodEntryDto, LayoutDto, PlanEditDto,
   PlanEntryDto, ProgressDto, RecipeDto,
 } from './workspace.dto';
 
@@ -41,6 +42,7 @@ export class WorkspaceController {
   constructor(
     @InjectConnection() private readonly connection: Connection,
     @InjectModel(User.name) private readonly users: Model<User>,
+    private readonly passwords: PasswordService,
   ) {}
 
   private collection(name: keyof typeof COLLECTION) {
@@ -103,9 +105,53 @@ export class WorkspaceController {
       : undefined;
     if (ids && ids.length === 0) return [];
     const records = await this.users.find({
-      role: 'patient', active: true, ...(ids ? { _id: { $in: ids } } : {}),
-    }).select('email').sort({ email: 1 }).limit(500).lean();
-    return records.map(r => ({ id: String(r._id), email: r.email }));
+      role: 'patient', deletedAt: { $exists: false }, ...(user.role !== 'admin' ? { active: true } : {}), ...(ids ? { _id: { $in: ids } } : {}),
+    }).select('email active').sort({ email: 1 }).limit(500).lean();
+    return records.map(r => ({ id: String(r._id), email: r.email, active: r.active }));
+  }
+
+  @ApiSecurity('csrf')
+  @Post('patients')
+  @Roles('admin')
+  @UseGuards(CsrfGuard)
+  async createPatient(@Body() dto: CreatePatientDto) {
+    const email = dto.email.trim().toLowerCase();
+    if (await this.users.exists({ email })) throw new ConflictException('Email is already registered');
+    const passwordHash = await this.passwords.hash(dto.password);
+    try {
+      const patient = await this.users.create({ email, passwordHash, role: 'patient', active: false, sessionVersion: 0 });
+      return { id: String(patient.id), email: patient.email, active: false };
+    } catch (error: any) {
+      if (error?.code === 11000) throw new ConflictException('Email is already registered');
+      throw error;
+    }
+  }
+
+  @ApiSecurity('csrf')
+  @Patch('patients/:id/status')
+  @Roles('admin')
+  @UseGuards(CsrfGuard)
+  async setPatientStatus(@Param('id') id: string, @Body() dto: PatientStatusDto) {
+    const result = await this.users.updateOne(
+      { _id: this.validId(id), role: 'patient', deletedAt: { $exists: false } },
+      { $set: { active: dto.active }, $inc: { sessionVersion: 1 } },
+    );
+    if (!result.matchedCount) throw new NotFoundException('Patient not found');
+    return { ok: true, active: dto.active };
+  }
+
+  @ApiSecurity('csrf')
+  @Delete('patients/:id')
+  @Roles('admin')
+  @UseGuards(CsrfGuard)
+  async deletePatient(@Param('id') id: string) {
+    // Soft delete: preserve clinical records until a separately authorised retention/deletion workflow is implemented.
+    const result = await this.users.updateOne(
+      { _id: this.validId(id), role: 'patient', deletedAt: { $exists: false } },
+      { $set: { active: false, deletedAt: new Date() }, $inc: { sessionVersion: 1 } },
+    );
+    if (!result.matchedCount) throw new NotFoundException('Patient not found');
+    return { ok: true };
   }
 
   @Get('dietitians')
