@@ -23,3 +23,21 @@ test('a failing check can be retried', async () => {
   await assert.rejects(()=>check(),/offline/);
   assert.equal(await check(),true);
 });
+
+test('reset after login prevents an old anonymous request being reused',async()=>{
+  let resolveOld;
+  let calls=0;
+  const check=singleFlight(()=> {
+    ++calls;
+    return calls===1 ? new Promise(resolve=>{resolveOld=resolve}) : Promise.resolve({role:'admin'});
+  });
+  const old=check();
+  await Promise.resolve();
+  check.reset();
+  const fresh=check();
+  resolveOld(null);
+  assert.equal(await old,null);
+  assert.deepEqual(await fresh,{role:'admin'});
+  assert.equal(calls,2);
+  assert.deepEqual(await check(),{role:'admin'});
+});

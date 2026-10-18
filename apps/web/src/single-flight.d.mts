@@ -1,1 +1,1 @@
-export function singleFlight<T>(callback: () => Promise<T>): () => Promise<T>;
+export function singleFlight<T>(callback: () => Promise<T>): (() => Promise<T>) & { reset(): void };

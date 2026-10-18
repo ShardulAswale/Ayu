@@ -42,7 +42,10 @@ export async function login(email: string, password: string, csrfToken: string):
     body: JSON.stringify({ email, password }),
   });
   if (!response.ok) return parseError(response);
-  return response.json() as Promise<{ user: SessionUser; csrfToken: string }>;
+  const result = await response.json() as { user: SessionUser; csrfToken: string };
+  // Discard any /auth/me started before the session cookie was rotated.
+  sessionCheck.reset();
+  return result;
 }
 async function retrieveCurrentUser(): Promise<SessionUser | null> {
   const response = await authFetch(endpoint('/auth/me'), { credentials: 'include', cache: 'no-store' });
@@ -61,6 +64,7 @@ export async function logout(csrfToken: string): Promise<void> {
     method: 'POST', credentials: 'include', cache: 'no-store', headers: { 'x-ayu-csrf': csrfToken },
   });
   if (!response.ok) return parseError(response);
+  sessionCheck.reset();
 }
 
 export interface DashboardSummary {

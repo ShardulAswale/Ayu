@@ -13,6 +13,7 @@ export function LoginPage() {
   const [user, setUser] = React.useState<SessionUser | null>(null);
   const [csrf, setCsrf] = React.useState('');
   const [serverSlow, setServerSlow] = React.useState(false);
+  const signingIn = React.useRef(false);
   const configured = Boolean(import.meta.env.VITE_API_URL);
 
   React.useEffect(() => {
@@ -22,7 +23,7 @@ export function LoginPage() {
     // be created once, immediately before the user actually submits login.
     const delay = window.setTimeout(() => { if (!cancelled) setServerSlow(true); }, 6000);
     void currentUser().then(existing => {
-      if (!cancelled && existing) {
+      if (!cancelled && !signingIn.current && existing) {
         setUser(existing);
         window.location.replace(dashboardPathForRole(existing.role));
       }
@@ -34,6 +35,7 @@ export function LoginPage() {
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     if (busy) return;
+    signingIn.current = true;
     setBusy(true); setError('');
     try {
       // A fresh CSRF fetch also recovers from an expired anonymous session.
