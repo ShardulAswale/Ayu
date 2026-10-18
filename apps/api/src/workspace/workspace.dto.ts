@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsArray, IsDateString, IsIn, IsInt, IsMongoId, IsNumber, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+import { IsArray, IsBoolean, IsEmail, IsDateString, IsIn, IsInt, MinLength, IsMongoId, IsNumber, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 
 export class FoodEntryDto {
   @ApiProperty({}) @IsString() @MaxLength(160) foodName!: string;
@@ -56,4 +56,12 @@ export class ProgressDto {
   @ApiProperty({}) @IsString() @MaxLength(90) metric!: string;
   @ApiProperty({ type: Number }) @IsNumber() @Min(-1000000) @Max(1000000) value!: number;
   @ApiProperty({}) @IsString() @MaxLength(20) unit!: string;
+}
+
+export class CreatePatientDto {
+  @ApiProperty({}) @IsEmail() @MaxLength(254) email!: string;
+  @ApiProperty({}) @IsString() @MinLength(12) @MaxLength(128) password!: string;
+}
+export class PatientStatusDto {
+  @ApiProperty({ type: Boolean }) @IsBoolean() active!: boolean;
 }
