@@ -132,7 +132,7 @@ export function DashboardPage() {
   });
   const [recipeForm, setRecipeForm] = React.useState({
     name: '', ingredients: '', instructions: '', calories: '0', protein: '0', carbs: '0',
-    fat: '0', fiber: '0', allergens: '', source: '',
+    fat: '0', fiber: '0', allergens: '', source: '', tags: '',
   });
   const [planForm, setPlanForm] = React.useState({
     title: '', plannedAt: localDateTime(new Date()), notes: '', status: 'draft', recipeId: '',
