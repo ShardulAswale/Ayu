@@ -243,10 +243,10 @@ export class WorkspaceController {
       } }).sort(sort).skip((page - 1) * limit).limit(limit).toArray(),
       this.collection('foods').countDocuments(filter),
     ]);
-    const ids = [...new Set(rows.flatMap(row => [row.categoryId,
+    const displayTagIds = [...new Set(rows.flatMap(row => [row.categoryId,
       ...(Array.isArray(row.tagIds) ? row.tagIds : [])].filter(Boolean).map(String)))];
-    const tagDocs = ids.length ? await this.collection('tags')
-      .find({ _id: { $in: ids.map(id => new Types.ObjectId(id)) } },
+    const tagDocs = displayTagIds.length ? await this.collection('tags')
+      .find({ _id: { $in: displayTagIds.map(id => new Types.ObjectId(id)) } },
         { projection: { slug: 1, label: 1, name: 1 } }).toArray() : [];
     const tags = new Map(tagDocs.map(tag => [String(tag._id), tag]));
     return { items: rows.map(row => foodForWorkspace(row, tags)), total,
