@@ -139,6 +139,9 @@ export function DashboardPage() {
     metric: 'Weight', value: '', unit: 'kg', measuredAt: localDateTime(new Date()),
   });
   const [assignDietitian, setAssignDietitian] = React.useState('');
+  const [patientCreateOpen, setPatientCreateOpen] = React.useState(false);
+  const [newPatient, setNewPatient] = React.useState({ email: '', password: '' });
+  const [patientDelete, setPatientDelete] = React.useState<PatientRef | null>(null);
 
   React.useEffect(() => {
     const handler = () => setView(window.location.hash.slice(1) || 'home');
@@ -559,18 +562,54 @@ export function DashboardPage() {
 
   const patientsPage = () => <div className="ws-stack">
     {pageHeading('Practice directory',role === 'admin' ? 'All patients' : 'My patients',
-      role === 'admin' ? 'Active patients in your practice.' : 'Only patients assigned to you appear here.')}
+      role === 'admin' ? 'Manage patient access and account status.' : 'Only active patients assigned to you appear here.',
+      role === 'admin' && <button className="ws-primary" type="button" onClick={() => setPatientCreateOpen(v => !v)}><Plus size={16}/> Create patient</button>)}
+    {role === 'admin' && patientCreateOpen && <form className="ws-card ws-form" onSubmit={event => {
+      event.preventDefault();
+      void mutate('Patient account created inactive. Activate only after securely sharing credentials and completing onboarding.',
+        () => workspaceApi('patients', 'POST', { email: newPatient.email.trim(), password: newPatient.password }))
+        .then(() => { setNewPatient({ email: '', password: '' }); setPatientCreateOpen(false); });
+    }}>
+      <h2>Create patient account</h2><p>Accounts are created inactive. Use a strong temporary password and share it securely; invitation and password-setup emails are not implemented yet.</p>
+      <div className="ws-form-grid">
+        <label>Email<input type="email" required maxLength={254} autoComplete="off" value={newPatient.email} onChange={e => setNewPatient(v => ({...v,email:e.target.value}))}/></label>
+        <label>Temporary password<input type="password" required minLength={12} maxLength={128} autoComplete="new-password" value={newPatient.password} onChange={e => setNewPatient(v => ({...v,password:e.target.value}))}/></label>
+      </div>
+      <div className="ws-form-actions"><button className="ws-primary" disabled={busy}>Create inactive patient</button>
+        <button type="button" className="ws-secondary" onClick={() => setPatientCreateOpen(false)}>Cancel</button></div>
+    </form>}
     <div className="ws-card"><div className="ws-section-title"><h2>Patient directory</h2><span>{patients.length} patients</span></div>
       {patients.length === 0 ? <Empty title="0 patients" description="No authorized patient accounts available." icon={Users}/> :
         <div className="ws-list">{patients.map(p => <div className="ws-list-row" key={p.id}>
           <div className="ws-initial">{p.email[0].toUpperCase()}</div>
-          <div className="ws-list-text"><strong>{p.email}</strong><span>Patient account</span></div>
-          <button className="ws-secondary" onClick={() => { setSelectedPatient(p.id);navigate('patient-overview'); }}>Open overview <ArrowRight size={14}/></button>
+          <div className="ws-list-text"><strong>{p.email}</strong><span>{p.active ? 'Active' : 'Inactive'} patient account</span></div>
+          {role === 'admin' && <label className="ws-select-inline">Active
+            <input type="checkbox" role="switch" aria-label={'Activate ' + p.email} checked={p.active} disabled={busy}
+              onChange={e => void mutate(e.target.checked ? 'Patient activated.' : 'Patient deactivated.',
+                () => workspaceApi('patients/' + p.id + '/status', 'PATCH', {active:e.target.checked}))}/>
+          </label>}
+          {p.active && <button className="ws-secondary" onClick={() => { setSelectedPatient(p.id);navigate('patient-overview'); }}>Open overview <ArrowRight size={14}/></button>}
+          {role === 'admin' && <button type="button" className="ws-icon-button" aria-label={'Delete ' + p.email}
+            disabled={busy} onClick={() => setPatientDelete(p)}><Trash2 size={16}/></button>}
         </div>)}</div>}
     </div>
+    {role === 'admin' && patientDelete && <div className="ws-overlay" role="presentation" style={{display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000}}>
+      <div className="ws-card ws-form" role="alertdialog" aria-modal="true" aria-labelledby="patient-delete-heading" aria-describedby="patient-delete-description" style={{width:'min(440px,90vw)',maxHeight:'90vh',overflowY:'auto'}}>
+        <h2 id="patient-delete-heading">Delete patient account?</h2>
+        <p id="patient-delete-description">Delete <strong>{patientDelete.email}</strong>? This immediately disables access and removes the account from the directory. Clinical records are retained for a separate authorised data-erasure process.</p>
+        <div className="ws-form-actions"><button type="button" className="ws-secondary" onClick={() => setPatientDelete(null)}>Cancel</button>
+          <button type="button" className="ws-primary" disabled={busy} onClick={() => {
+            const id = patientDelete.id;
+            void mutate('Patient account removed.', () => workspaceApi('patients/' + id, 'DELETE')).then(() => {
+              setPatientDelete(null); if (selectedPatient === id) setSelectedPatient('');
+            });
+          }}>Confirm delete</button></div>
+      </div>
+    </div>}
     {role === 'admin' && <div className="ws-card ws-form"><h2>Assign dietitian to patient</h2>
       <p>Only assigned practitioners can access a patient's clinical workspace.</p>
-      <div className="ws-form-grid">{choosePatient}
+      <div className="ws-form-grid"><label>Patient<select value={selectedPatient} onChange={e => setSelectedPatient(e.target.value)}>
+        <option value="">Select an active patient</option>{patients.filter(p=>p.active).map(p=><option value={p.id} key={p.id}>{p.email}</option>)}</select></label>
         <label>Dietitian<select value={assignDietitian} onChange={e => setAssignDietitian(e.target.value)}><option value="">Select a dietitian</option>{dietitians.map(d => <option key={d.id} value={d.id}>{d.email}</option>)}</select></label>
       </div><button className="ws-primary" disabled={!selectedPatient || !assignDietitian || busy}
         onClick={() => void mutate('Dietitian assigned.', () => workspaceApi('assignments','POST',{patientId:selectedPatient,dietitianId:assignDietitian}))}>Assign</button>
