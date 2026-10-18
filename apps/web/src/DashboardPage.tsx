@@ -114,6 +114,11 @@ export function DashboardPage() {
   const [widgets, setWidgets] = React.useState<string[]>(defaultWidgets);
   const [editingWidgets, setEditingWidgets] = React.useState(false);
   const [recipeSearch, setRecipeSearch] = React.useState('');
+  const [recipeTags, setRecipeTags] = React.useState<string[]>([]);
+  const [recipeTagLogic, setRecipeTagLogic] = React.useState<'and'|'or'>('or');
+  const [recipeSort, setRecipeSort] = React.useState('name');
+  const [recipeSortDir, setRecipeSortDir] = React.useState<'asc'|'desc'>('asc');
+  const [recipeTagInput, setRecipeTagInput] = React.useState('');
   const [libraryTab, setLibraryTab] = React.useState<'foods' | 'recipes'>('foods');
   const [recipeEditing, setRecipeEditing] = React.useState('');
   const [mealEditing, setMealEditing] = React.useState('');
@@ -429,7 +434,7 @@ export function DashboardPage() {
     {pageHeading('Nutrition library', isPatient ? 'My recipes' : 'Foods & recipes',
       'Reusable foods and preparations with ingredient, serving and macronutrient information.',
       isStaff && libraryTab === 'recipes' && <button className="ws-primary" onClick={() => { setRecipeEditing(''); setRecipeForm({
-        name:'',ingredients:'',instructions:'',calories:'0',protein:'0',carbs:'0',fat:'0',fiber:'0',allergens:'',source:'',
+        name:'',ingredients:'',instructions:'',calories:'0',protein:'0',carbs:'0',fat:'0',fiber:'0',allergens:'',source:'',tags:'',
       }); setFormOpen(true); }}><Plus size={16}/> Add recipe</button>)}
     <div className="ws-tabs" role="tablist" aria-label="Food library sections">
       <button type="button" role="tab" aria-selected={libraryTab === 'foods'} className={libraryTab === 'foods' ? 'active' : ''}
@@ -442,7 +447,7 @@ export function DashboardPage() {
     {isStaff && formOpen && <form className="ws-card ws-form" onSubmit={event => {
       event.preventDefault();
       const data = {
-        ...recipeForm, calories:Number(recipeForm.calories), protein:Number(recipeForm.protein),
+        ...recipeForm, tags:recipeForm.tags.split(',').map(x=>x.trim().toLowerCase()).filter(Boolean).slice(0,20), calories:Number(recipeForm.calories), protein:Number(recipeForm.protein),
         carbs:Number(recipeForm.carbs), fat:Number(recipeForm.fat), fiber:Number(recipeForm.fiber),
       };
       void mutate(recipeEditing ? 'Recipe updated.' : 'Recipe added.',
@@ -457,6 +462,7 @@ export function DashboardPage() {
           <label key={field}>{field === 'calories' ? 'Calories (kcal)' : field + ' (g)'}
             <input required type="number" min="0" max="100000" step="any" value={recipeForm[field]}
               onChange={e => setRecipeForm({ ...recipeForm,[field]:e.target.value })}/></label>)}
+        <label>Tags (comma-separated)<input maxLength={800} value={recipeForm.tags} onChange={e=>setRecipeForm({...recipeForm,tags:e.target.value})} placeholder="vegetarian, high protein, breakfast"/></label>
         <label>Allergens<input maxLength={500} value={recipeForm.allergens} onChange={e => setRecipeForm({ ...recipeForm,allergens:e.target.value })}/></label>
         <label>Nutrition source<input maxLength={400} value={recipeForm.source} onChange={e => setRecipeForm({ ...recipeForm,source:e.target.value })}/></label>
         <label className="ws-wide">Preparation instructions<textarea maxLength={3000} value={recipeForm.instructions} onChange={e => setRecipeForm({ ...recipeForm,instructions:e.target.value })}/></label>
@@ -467,16 +473,34 @@ export function DashboardPage() {
     <div className="ws-card">
       <div className="ws-toolbar"><label className="ws-search"><Search size={17}/><input placeholder="Search foods, recipes, ingredients…" aria-label="Search recipes" value={recipeSearch} onChange={e => setRecipeSearch(e.target.value)}/></label>
         <span>{recipes.length} entries</span></div>
+      <div className="ws-catalogue-filters">
+        <label>Add tag<input aria-label="Recipe tag to filter" list="ayu-recipe-tags" value={recipeTagInput} onChange={e=>setRecipeTagInput(e.target.value)} placeholder="Enter or select tag"/></label>
+        <datalist id="ayu-recipe-tags">{Array.from(new Set(recipes.flatMap(r=>r.tags||[]))).map(tag=><option key={tag} value={tag}/>)}</datalist>
+        <button type="button" className="ws-secondary" onClick={()=>{const tag=recipeTagInput.trim().toLowerCase();if(tag&&!recipeTags.includes(tag))setRecipeTags(v=>[...v,tag]);setRecipeTagInput('');}}>Add tag</button>
+        <label>Match<select aria-label="Recipe tag match logic" value={recipeTagLogic} onChange={e=>setRecipeTagLogic(e.target.value as 'and'|'or')}><option value="or">OR · any</option><option value="and">AND · all</option></select></label>
+        <label>Sort by<select aria-label="Sort recipes by" value={recipeSort} onChange={e=>setRecipeSort(e.target.value)}>{['name','ingredients','instructions','source','allergens','tags','calories','protein','carbs','fat','fiber'].map(t=><option key={t} value={t}>{t}</option>)}</select></label>
+        <label>Order<select aria-label="Recipe sort direction" value={recipeSortDir} onChange={e=>setRecipeSortDir(e.target.value as 'asc'|'desc')}><option value="asc">Ascending</option><option value="desc">Descending</option></select></label>
+      </div>
+      {recipeTags.length>0 && <div className="ws-catalogue-chips">{recipeTags.map(tag=><button type="button" key={tag} onClick={()=>setRecipeTags(v=>v.filter(x=>x!==tag))}>{tag} ×</button>)}<button type="button" onClick={()=>setRecipeTags([])}>Clear</button></div>}
       {recipes.length === 0 ? <Empty title="0 recipes" description="The library is empty. Practitioners can add verified recipes and nutritional details." icon={BookOpen}/> :
         <div className="ws-table-wrap"><table className="ws-table"><thead><tr><th>Food / recipe</th><th>Calories</th><th>Protein</th><th>Carbs</th><th>Fat</th><th>Fiber</th>{isStaff && <th>Actions</th>}</tr></thead>
-          <tbody>{recipes.filter(r => (r.name + ' ' + formatRecipeIngredients(r.ingredients)).toLowerCase().includes(recipeSearch.toLowerCase())).map(recipe =>
-            <tr key={recipe.id}><td><strong>{recipe.name}</strong><small>{formatRecipeIngredients(recipe.ingredients)}</small>{Boolean(recipe.allergens) && <small>Allergens: {displayText(recipe.allergens)}</small>}</td>
+          <tbody>{recipes.filter(r => {
+              const searchable=[r.name,formatRecipeIngredients(r.ingredients),displayText(r.allergens),displayText(r.source),...(r.tags||[])].join(' ').toLowerCase();
+              const tagMatches=recipeTags.map(t=>(r.tags||[]).some(tag=>tag.toLowerCase()===t));
+              return searchable.includes(recipeSearch.toLowerCase()) && (!tagMatches.length || (recipeTagLogic==='and'?tagMatches.every(Boolean):tagMatches.some(Boolean)));
+            }).sort((a,b)=>{
+              const numeric=['calories','protein','carbs','fat','fiber'].includes(recipeSort);
+              const av=(a as unknown as Record<string,unknown>)[recipeSort],bv=(b as unknown as Record<string,unknown>)[recipeSort];
+              const cmp=numeric?(Number(av??0)-Number(bv??0)):String(Array.isArray(av)?av.join(','):av??'').localeCompare(String(Array.isArray(bv)?bv.join(','):bv??''),undefined,{numeric:true,sensitivity:'base'});
+              return (recipeSortDir==='asc'?1:-1)*cmp||a.id.localeCompare(b.id);
+            }).map(recipe =>
+            <tr key={recipe.id}><td><strong>{recipe.name}</strong><small>{formatRecipeIngredients(recipe.ingredients)}</small>{Boolean(recipe.allergens) && <small>Allergens: {displayText(recipe.allergens)}</small>}{Boolean(recipe.tags?.length) && <small>Tags: {recipe.tags?.join(' · ')}</small>}</td>
               <td>{recipe.calories == null ? '—' : int(recipe.calories) + ' kcal'}</td><td>{recipe.protein == null ? '—' : int(recipe.protein) + ' g'}</td><td>{recipe.carbs == null ? '—' : int(recipe.carbs) + ' g'}</td><td>{recipe.fat == null ? '—' : int(recipe.fat) + ' g'}</td><td>{recipe.fiber == null ? '—' : int(recipe.fiber) + ' g'}</td>
               {isStaff && <td><div className="ws-inline-actions">
                 <button type="button" onClick={() => { setRecipeEditing(recipe.id); setRecipeForm({
                   name:recipe.name,ingredients:formatRecipeIngredients(recipe.ingredients),instructions:displayText(recipe.instructions),
                   calories:String(recipe.calories ?? ''),protein:String(recipe.protein ?? ''),carbs:String(recipe.carbs ?? ''),
-                  fat:String(recipe.fat ?? ''),fiber:String(recipe.fiber ?? ''),allergens:displayText(recipe.allergens),source:displayText(recipe.source),
+                  fat:String(recipe.fat ?? ''),fiber:String(recipe.fiber ?? ''),allergens:displayText(recipe.allergens),source:displayText(recipe.source),tags:(recipe.tags||[]).join(', '),
                 });setFormOpen(true); }}>Edit</button>
                 <button type="button" onClick={() => { if (window.confirm('Delete recipe? Existing food entries keep their recorded snapshot.')) void mutate('Recipe removed.', () => workspaceApi('recipes/' + recipe.id,'DELETE')); }}>Remove</button>
               </div></td>}
