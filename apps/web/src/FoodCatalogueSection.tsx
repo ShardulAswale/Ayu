@@ -1,6 +1,6 @@
 import React from 'react';
 import { Search, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
-import { FoodCatalogPage, workspaceApi } from './workspace-client';
+import { CatalogTag, FoodCatalogPage, workspaceApi } from './workspace-client';
 import { SessionExpiredError } from './auth-client';
 import { nutritionLabel } from './catalogue-format.mjs';
 
@@ -14,6 +14,14 @@ export function FoodCatalogueSection() {
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState('');
   const [retry, setRetry] = React.useState(0);
+  const [allTags, setAllTags] = React.useState<CatalogTag[]>([]);
+  const [selectedTags, setSelectedTags] = React.useState<string[]>([]);
+  const [tagLogic, setTagLogic] = React.useState<'and'|'or'>('or');
+  const [sortBy, setSortBy] = React.useState('name');
+  const [sortDir, setSortDir] = React.useState<'asc'|'desc'>('asc');
+  React.useEffect(() => {
+    void workspaceApi<CatalogTag[]>('food-tags').then(setAllTags).catch(() => {});
+  }, []);
 
   React.useEffect(() => {
     let active = true;
@@ -23,6 +31,8 @@ export function FoodCatalogueSection() {
       try {
         const params = new URLSearchParams({ page: String(page), limit: String(PAGE_SIZE) });
         if (query.trim()) params.set('q', query.trim());
+        if (selectedTags.length) {params.set('tagIds', selectedTags.join(','));params.set('tagLogic',tagLogic);}
+        params.set('sortBy',sortBy);params.set('sortDir',sortDir);
         const data = await workspaceApi<FoodCatalogPage>('foods?' + params.toString());
         if (active) setResponse(data);
       } catch (cause) {
@@ -38,7 +48,7 @@ export function FoodCatalogueSection() {
       }
     }, query.trim() ? 300 : 0);
     return () => { active = false; window.clearTimeout(timer); };
-  }, [query, page, retry]);
+  }, [query, page, retry, selectedTags, tagLogic, sortBy, sortDir]);
 
   return <section className="ws-card" aria-label="USDA food catalogue">
     <div className="ws-toolbar">
@@ -48,6 +58,15 @@ export function FoodCatalogueSection() {
       </label>
       <span>{response ? response.total.toLocaleString() + ' foods' : 'Food catalogue'}</span>
     </div>
+    <div className="ws-catalogue-filters">
+      <label>Tags<select aria-label="Add food tag" value="" onChange={e => {if(e.target.value&&!selectedTags.includes(e.target.value)){setSelectedTags(v=>[...v,e.target.value]);setPage(1);}}}>
+        <option value="">Select a tag…</option>{allTags.filter(t=>!selectedTags.includes(t.id)).map(t=><option key={t.id} value={t.id}>{t.label}</option>)}</select></label>
+      <label>Match<select aria-label="Food tag match logic" value={tagLogic} onChange={e=>{setTagLogic(e.target.value as 'and'|'or');setPage(1);}}><option value="or">OR · any tag</option><option value="and">AND · all tags</option></select></label>
+      <label>Sort by<select aria-label="Sort foods by" value={sortBy} onChange={e=>{setSortBy(e.target.value);setPage(1);}}>
+        {['name','foodType','category','tags','dataset','calories','protein','carbs','fat','fiber'].map(t=><option key={t} value={t}>{t}</option>)}</select></label>
+      <label>Order<select aria-label="Food sort direction" value={sortDir} onChange={e=>{setSortDir(e.target.value as 'asc'|'desc');setPage(1);}}><option value="asc">Ascending</option><option value="desc">Descending</option></select></label>
+    </div>
+    {selectedTags.length>0 && <div className="ws-catalogue-chips" aria-label="Selected food tags">{selectedTags.map(id=><button key={id} type="button" onClick={()=>{setSelectedTags(v=>v.filter(x=>x!==id));setPage(1);}}>{allTags.find(t=>t.id===id)?.label||id} ×</button>)}<button type="button" onClick={()=>{setSelectedTags([]);setPage(1);}}>Clear tags</button></div>}
     <p>Verified catalogue entries from MongoDB. Nutrients are shown per 100 g; missing values are not estimated.</p>
     {loading && <div role="status" className="ws-catalogue-status">Loading foods…</div>}
     {!loading && error && <div role="alert" className="ws-catalogue-status">{error}

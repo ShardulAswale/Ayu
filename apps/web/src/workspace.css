@@ -179,3 +179,9 @@
 .ws-patient-status:hover:not(:disabled){filter:brightness(.92)}
 .ws-patient-status:disabled{opacity:.6;cursor:wait}
 @media(max-width:700px){.ws-patient-status{min-width:76px;padding:8px 10px}}
+
+.ws-catalogue-filters{display:flex;flex-wrap:wrap;gap:12px;align-items:end;margin:15px 0}
+.ws-catalogue-filters label{display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:600;min-width:145px;flex:1}
+.ws-catalogue-filters input,.ws-catalogue-filters select{min-height:39px;padding:8px;border:1px solid #c9d8cf;border-radius:7px;background:white;color:#173d32;max-width:100%}
+.ws-catalogue-chips{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 14px}
+.ws-catalogue-chips button{padding:7px 11px;border:1px solid #b5d1c2;border-radius:20px;background:#eaf5ee;color:#18523a;cursor:pointer}
