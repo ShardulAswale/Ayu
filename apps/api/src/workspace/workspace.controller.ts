@@ -226,10 +226,10 @@ export class WorkspaceController {
     if (ids.length) filter.tagIds = (tagLogic || 'or') === 'and'
       ? { $all: ids.map(oid) } : { $in: ids.map(oid) };
     const sortFields: Record<string, string> = {
-      name: 'name', foodType: 'foodType', category: 'categoryId',
-      calories: 'nutritionPer100g.calories', protein: 'nutritionPer100g.protein',
-      carbs: 'nutritionPer100g.carbs', fat: 'nutritionPer100g.fat',
-      fiber: 'nutritionPer100g.fiber',
+      name: 'name', foodType: 'foodType', category: 'categoryId', tags: 'tagIds', dataset: 'source.dataset',
+      calories: 'nutritionPer100g.caloriesKcal', protein: 'nutritionPer100g.proteinG',
+      carbs: 'nutritionPer100g.carbsG', fat: 'nutritionPer100g.fatG',
+      fiber: 'nutritionPer100g.fiberG',
     };
     if (sortBy && !sortFields[sortBy]) throw new BadRequestException('Invalid sort field');
     if (sortDir && !['asc', 'desc'].includes(sortDir)) throw new BadRequestException('Invalid sort direction');
