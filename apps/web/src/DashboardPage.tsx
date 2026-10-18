@@ -567,8 +567,7 @@ export function DashboardPage() {
     {role === 'admin' && patientCreateOpen && <form className="ws-card ws-form" onSubmit={event => {
       event.preventDefault();
       void mutate('Patient account created inactive. Activate only after securely sharing credentials and completing onboarding.',
-        () => workspaceApi('patients', 'POST', { email: newPatient.email.trim(), password: newPatient.password }))
-        .then(() => { setNewPatient({ email: '', password: '' }); setPatientCreateOpen(false); });
+        async () => { await workspaceApi('patients', 'POST', { email: newPatient.email.trim(), password: newPatient.password }); setNewPatient({ email: '', password: '' }); setPatientCreateOpen(false); });
     }}>
       <h2>Create patient account</h2><p>Accounts are created inactive. Use a strong temporary password and share it securely; invitation and password-setup emails are not implemented yet.</p>
       <div className="ws-form-grid">
@@ -600,7 +599,8 @@ export function DashboardPage() {
         <div className="ws-form-actions"><button type="button" className="ws-secondary" onClick={() => setPatientDelete(null)}>Cancel</button>
           <button type="button" className="ws-primary" disabled={busy} onClick={() => {
             const id = patientDelete.id;
-            void mutate('Patient account removed.', () => workspaceApi('patients/' + id, 'DELETE')).then(() => {
+            void mutate('Patient account removed.', async () => {
+              await workspaceApi('patients/' + id, 'DELETE');
               setPatientDelete(null); if (selectedPatient === id) setSelectedPatient('');
             });
           }}>Confirm delete</button></div>
