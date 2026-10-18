@@ -90,9 +90,13 @@ function dateSpan(date: string, view: 'day' | 'week' | 'month') {
 export function DashboardPage() {
   const [user, setUser] = React.useState<SessionUser | null>(null);
   const [authLoading, setAuthLoading] = React.useState(true);
+  const [authSlow, setAuthSlow] = React.useState(false);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState('');
   const [failedSections, setFailedSections] = React.useState<string[]>([]);
+  const [pendingSections, setPendingSections] = React.useState<string[]>([]);
+  const reloadCounter = React.useRef(0);
+  const lastPatientScope = React.useRef<string | null>(null);
   const [notice, setNotice] = React.useState('');
   const [busy, setBusy] = React.useState(false);
   const [menuOpen, setMenuOpen] = React.useState(false);
@@ -143,7 +147,8 @@ export function DashboardPage() {
   }, []);
   React.useEffect(() => {
     let active = true;
-    currentUser().then(identity => {
+    const delay = window.setTimeout(() => { if (active) setAuthSlow(true); }, 6000);
+    void currentUser().then(identity => {
       if (!active) return;
       if (!identity) { window.location.replace('/login'); return; }
       const canonical = dashboardPathForRole(identity.role);
@@ -151,13 +156,26 @@ export function DashboardPage() {
         window.location.replace(canonical); return;
       }
       setUser(identity);
-    }).catch(() => { if (active) setError('Could not verify the session.'); })
-      .finally(() => { if (active) setAuthLoading(false); });
-    return () => { active = false; };
+    }).catch(cause => {
+      if (active) setError(cause instanceof Error ? cause.message : 'Could not verify the session.');
+    }).finally(() => {
+      window.clearTimeout(delay);
+      if (active) { setAuthSlow(false); setAuthLoading(false); }
+    });
+    return () => { active = false; window.clearTimeout(delay); };
   }, []);
 
   const reload = React.useCallback(async (identity: SessionUser, patientSelection: string) => {
-    setLoading(true); setError('');
+    const requestId = ++reloadCounter.current;
+    const current = () => reloadCounter.current === requestId;
+    const scope = identity.id + ':' + patientSelection;
+    const patientSwitched = lastPatientScope.current !== null && lastPatientScope.current !== scope;
+    const initialLoad = lastPatientScope.current === null;
+    lastPatientScope.current = scope;
+    // Keep the existing workspace visible on ordinary refreshes. A patient
+    // switch intentionally blocks it until the new patient scope is loaded.
+    if (patientSwitched || initialLoad) setLoading(true);
+    setFailedSections([]); setError('');
     const role = identity.role;
     const isPatient = role === 'patient';
     const hasPatientScope = isPatient || Boolean(patientSelection);
@@ -165,46 +183,53 @@ export function DashboardPage() {
     const start = new Date(); start.setDate(start.getDate() - 180);
     const end = new Date(); end.setDate(end.getDate() + 180);
     const range = '&from=' + encodeURIComponent(start.toISOString()) + '&to=' + encodeURIComponent(end.toISOString());
-    try {
-      const keys = ['stats', 'recipes', 'appointments', 'patients', 'dietitians', 'layout', 'entries', 'plans', 'progress'] as const;
-      const results = await Promise.allSettled([
-        workspaceApi<WorkspaceStats>('stats?offset=' + new Date().getTimezoneOffset()),
-        workspaceApi<Recipe[]>('recipes'),
-        workspaceApi<Appointment[]>('appointments' + (hasPatientScope ? param : '')),
-        isPatient ? Promise.resolve([] as PatientRef[]) : workspaceApi<PatientRef[]>('patients'),
-        role === 'admin' ? workspaceApi<PatientRef[]>('dietitians') : Promise.resolve([] as PatientRef[]),
-        isPatient ? Promise.resolve({ widgets: defaultWidgets }) : workspaceApi<{widgets: string[]}>('layout'),
-        hasPatientScope ? workspaceApi<FoodEntry[]>('entries' + (param || '?') + (param ? range : range.slice(1))) : Promise.resolve([] as FoodEntry[]),
-        hasPatientScope ? workspaceApi<PlanEntry[]>('plans' + (param || '?') + (param ? range : range.slice(1))) : Promise.resolve([] as PlanEntry[]),
-        hasPatientScope ? workspaceApi<ProgressEntry[]>('progress' + param) : Promise.resolve([] as ProgressEntry[]),
-      ]);
-      // A 401 must invalidate the complete dashboard, not expose partial patient data.
-      if (results.some(item => item.status === 'rejected' && item.reason instanceof SessionExpiredError)) {
-        setStats(null); setUser(null);
-        window.location.replace('/login');
-        return;
-      }
-      const failed = results.flatMap((item, index) => item.status === 'rejected' ? [keys[index]] : []);
-      const read = <T,>(index: number, fallback: T): T => {
-        const item = results[index];
-        return item.status === 'fulfilled' ? item.value as T : fallback;
-      };
-      setStats(read<WorkspaceStats | null>(0, null));
-      setRecipes(read<Recipe[]>(1, []));
-      setAppointments(read<Appointment[]>(2, []));
-      setPatients(read<PatientRef[]>(3, []));
-      setDietitians(read<PatientRef[]>(4, []));
-      setWidgets(read<{ widgets: string[] }>(5, {widgets: defaultWidgets}).widgets);
-      setEntries(read<FoodEntry[]>(6, []));
-      setPlans(read<PlanEntry[]>(7, []));
-      setProgress(read<ProgressEntry[]>(8, []));
-      setFailedSections(failed);
-      if (failed.length) setError('Unable to load: ' + failed.join(', ') + '. Other sections remain available.');
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Data is unavailable. Retry to reconnect.');
-    } finally {
-      setLoading(false);
-    }
+    const keys = ['stats', 'recipes', 'appointments', 'patients', 'dietitians', 'layout', 'entries', 'plans', 'progress'] as const;
+    setPendingSections([...keys]);
+    const requests = [
+      workspaceApi<WorkspaceStats>('stats?offset=' + new Date().getTimezoneOffset()),
+      workspaceApi<Recipe[]>('recipes'),
+      workspaceApi<Appointment[]>('appointments' + (hasPatientScope ? param : '')),
+      isPatient ? Promise.resolve([] as PatientRef[]) : workspaceApi<PatientRef[]>('patients'),
+      role === 'admin' ? workspaceApi<PatientRef[]>('dietitians') : Promise.resolve([] as PatientRef[]),
+      isPatient ? Promise.resolve({ widgets: defaultWidgets }) : workspaceApi<{widgets: string[]}>('layout'),
+      hasPatientScope ? workspaceApi<FoodEntry[]>('entries' + (param || '?') + (param ? range : range.slice(1))) : Promise.resolve([] as FoodEntry[]),
+      hasPatientScope ? workspaceApi<PlanEntry[]>('plans' + (param || '?') + (param ? range : range.slice(1))) : Promise.resolve([] as PlanEntry[]),
+      hasPatientScope ? workspaceApi<ProgressEntry[]>('progress' + param) : Promise.resolve([] as ProgressEntry[]),
+    ];
+    requests.forEach((request, index) => {
+      void request.then(value => {
+        if (!current()) return;
+        // Publish each section as soon as it arrives. A slower MongoDB query
+        // must never keep the complete dashboard behind a loading screen.
+        switch (index) {
+          case 0: setStats(value as WorkspaceStats); if (!patientSwitched) setLoading(false); break;
+          case 1: setRecipes(value as Recipe[]); break;
+          case 2: setAppointments(value as Appointment[]); break;
+          case 3: setPatients(value as PatientRef[]); break;
+          case 4: setDietitians(value as PatientRef[]); break;
+          case 5: setWidgets((value as {widgets: string[]}).widgets); break;
+          case 6: setEntries(value as FoodEntry[]); break;
+          case 7: setPlans(value as PlanEntry[]); break;
+          case 8: setProgress(value as ProgressEntry[]); break;
+        }
+      }, cause => {
+        if (!current()) return;
+        // Revoked sessions must be handled immediately, not after all
+        // unrelated requests have finished.
+        if (cause instanceof SessionExpiredError) {
+          reloadCounter.current++;
+          setStats(null); setUser(null);
+          window.location.replace('/login');
+          return;
+        }
+        setFailedSections(previous => [...previous, keys[index]]);
+        setError('Some workspace data could not be loaded. Retry the affected section.');
+      }).finally(() => {
+        if (current()) setPendingSections(previous => previous.filter(key => key !== keys[index]));
+      });
+    });
+    await Promise.allSettled(requests);
+    if (current()) setLoading(false);
   }, []);
   React.useEffect(() => {
     if (user) void reload(user, selectedPatient);
@@ -234,9 +259,9 @@ export function DashboardPage() {
     catch { setError('Sign out failed. Please try again.'); setBusy(false); }
   };
 
-  if (authLoading) return <main className="ayu-login-page"><p role="status">Verifying session…</p></main>;
+  if (authLoading) return <main className="ayu-login-page"><p role="status">Verifying session… {authSlow ? 'The server may be waking after inactivity.' : ''}</p></main>;
   if (!user) return <main className="ayu-login-page"><div className="ayu-login-card">
-    <p role="alert">{error || 'Please sign in.'}</p><a href="/login">Go to login</a>
+    <p role="alert">{error || 'Please sign in.'}</p><button type="button" onClick={() => window.location.reload()}>Retry session check</button> <a href="/login">Go to login</a>
   </div></main>;
 
   const role = user.role;
@@ -624,6 +649,8 @@ export function DashboardPage() {
       'patient-overview': ['patients', 'entries', 'plans', 'progress'],
       'diet-plan-builder': ['patients', 'plans'], recipes: libraryTab === 'recipes' ? ['recipes'] : [], reports: ['stats'],
     };
+    const waiting = (dependencies[validView] || []).filter(key => pendingSections.includes(key));
+    if (waiting.length && validView !== 'home') return <div className="ws-card" role="status">Loading {waiting.join(', ')}…</div>;
     const missing = (dependencies[validView] || []).filter(key => failedSections.includes(key));
     if (missing.length || (validView === 'home' && !stats)) return <div className="ws-card">
       <Empty title="Section data unavailable" description={'Could not load: ' + (missing.join(', ') || 'stats') + '. Please retry.'}/>

@@ -7,7 +7,7 @@ export default defineConfig(({ mode }) => {
   return {
   base,
   plugins: [react(), VitePWA({
-    registerType: 'prompt',
+    registerType: 'autoUpdate',
     includeAssets: [],
     manifest: {
       name: 'Ayu — Nutrition Care', short_name: 'Ayu',
@@ -16,7 +16,14 @@ export default defineConfig(({ mode }) => {
       display: 'standalone', start_url: base, scope: base,
       icons: [{ src: `${base}icon.svg`, sizes: 'any', type: 'image/svg+xml', purpose: 'any' }]
     },
-    workbox: { globPatterns: ['**/*.{js,css,html,svg}'], navigateFallback: `${base}index.html`, runtimeCaching: [] }
+    workbox: {
+      globPatterns: ['**/*.{js,css,html,svg}'],
+      navigateFallback: `${base}index.html`,
+      // Sensitive application routes must be served from the network.
+      navigateFallbackDenylist: [/^\/login(?:\/|$)/, /^\/dashboard(?:\/|$)/, /^\/api(?:\/|$)/],
+      cleanupOutdatedCaches: true, skipWaiting: true, clientsClaim: true,
+      runtimeCaching: [],
+    }
   })],
   };
 });

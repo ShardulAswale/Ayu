@@ -12,27 +12,30 @@ export function LoginPage() {
   const [error, setError] = React.useState('');
   const [user, setUser] = React.useState<SessionUser | null>(null);
   const [csrf, setCsrf] = React.useState('');
+  const [serverSlow, setServerSlow] = React.useState(false);
+  const signingIn = React.useRef(false);
   const configured = Boolean(import.meta.env.VITE_API_URL);
 
   React.useEffect(() => {
     if (!configured) return;
     let cancelled = false;
-    (async () => {
-      try {
-        const token = await getCsrf();
-        if (!cancelled) setCsrf(token);
-      } catch { if (!cancelled) setError('Could not initialize security verification. Try signing in again.'); }
-      try {
-        const existing = await currentUser();
-        if (!cancelled && existing) { setUser(existing); window.location.replace(dashboardPathForRole(existing.role)); }
-      } catch { /* A failed old-session check must not block a new login attempt. */ }
-    })();
-    return () => { cancelled = true; };
+    // Only check the existing session on entry. Anonymous CSRF cookies must
+    // be created once, immediately before the user actually submits login.
+    const delay = window.setTimeout(() => { if (!cancelled) setServerSlow(true); }, 6000);
+    void currentUser().then(existing => {
+      if (!cancelled && !signingIn.current && existing) {
+        setUser(existing);
+        window.location.replace(dashboardPathForRole(existing.role));
+      }
+    }).catch(() => { /* A failed old-session lookup must not block sign-in. */ })
+      .finally(() => { window.clearTimeout(delay); if (!cancelled) setServerSlow(false); });
+    return () => { cancelled = true; window.clearTimeout(delay); };
   }, [configured]);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     if (busy) return;
+    signingIn.current = true;
     setBusy(true); setError('');
     try {
       // A fresh CSRF fetch also recovers from an expired anonymous session.
@@ -59,6 +62,7 @@ export function LoginPage() {
     <p className="ayu-login-intro">{user ? 'Your identity has been verified.' : 'One secure sign-in for patients, dietitians and administrators.'}</p>
     {!configured && <div className="ayu-login-alert" role="status">Secure sign-in is not yet available on this deployment. The API address has not been configured.</div>}
     {error && <div className="ayu-login-alert" role="alert">{error}</div>}
+    {serverSlow && !error && <p role="status">Connecting to Ayu. The server may be waking from inactivity; you can still enter your details.</p>}
     {user ? <div className="ayu-login-session">
       <strong>{user.email}</strong>
       <span>Role: {user.role}</span>

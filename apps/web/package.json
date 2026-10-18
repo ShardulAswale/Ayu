@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test:routing": "node --test tests/role-routing.test.mjs",
     "test:recipes": "node --test tests/recipe-format.test.mjs",
-    "test:catalogue": "node --test tests/catalogue-format.test.mjs"
+    "test:catalogue": "node --test tests/catalogue-format.test.mjs",
+    "test:auth": "node --test tests/single-flight.test.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",
