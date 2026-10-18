@@ -75,7 +75,7 @@ export class WorkspaceController {
       });
       if (!assigned) throw new ForbiddenException('Not assigned to this patient');
     }
-    const patient = await this.users.findOne({ _id: id, role: 'patient', active: true }).select('_id').lean();
+    const patient = await this.users.findOne({ _id: id, role: 'patient', active: true, deletedAt: { $exists: false } }).select('_id').lean();
     if (!patient) throw new NotFoundException('Patient not found');
     return id;
   }
