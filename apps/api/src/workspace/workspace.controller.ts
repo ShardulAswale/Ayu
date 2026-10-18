@@ -6,6 +6,7 @@ import {
 import { InjectConnection, InjectModel } from '@nestjs/mongoose';
 import { Connection, Model, Types } from 'mongoose';
 import { Request } from 'express';
+import { foodForWorkspace, recipeForWorkspace, escapedSearch } from './catalogue.mapper';
 import { CsrfGuard } from '../auth/csrf.guard';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
@@ -19,6 +20,7 @@ const COLLECTION = {
   entries: 'FoodEntries', recipes: 'Recipes', plans: 'DietPlans',
   appointments: 'Appointments', assignments: 'PatientAssignments',
   layouts: 'DashboardLayouts', progress: 'ProgressEntries',
+  foods: 'Foods', tags: 'Tags',
 } as const;
 const VALID_WIDGETS = [
   'patients', 'meetings', 'reviews', 'plans', 'activity', 'appointments', 'dietitians',
@@ -133,8 +135,49 @@ export class WorkspaceController {
   }
 
   @Get('recipes')
-  async recipes() {
-    return (await this.collection('recipes').find({}).sort({ name: 1 }).limit(250).toArray()).map(out);
+  async recipes(@Req() req: Request) {
+    const user = await this.identity(req);
+    // Hide explicit drafts from patients; legacy recipes without isPublished remain accessible.
+    const filter = user.role === 'patient' ? { isPublished: { $ne: false } } : {};
+    return (await this.collection('recipes').find(filter).sort({ name: 1 }).limit(250).toArray())
+      .map(doc => recipeForWorkspace(doc));
+  }
+
+  @Get('foods')
+  async foods(@Query('q') q?: string, @Query('page') pageRaw?: string,
+    @Query('limit') limitRaw?: string, @Query('categoryId') categoryId?: string) {
+    if (q !== undefined && (typeof q !== 'string' || q.length > 100)) {
+      throw new BadRequestException('Search must be at most 100 characters');
+    }
+    const page = pageRaw === undefined ? 1 : Number(pageRaw);
+    const limit = limitRaw === undefined ? 25 : Number(limitRaw);
+    if (!Number.isSafeInteger(page) || page < 1 || page > 10000 ||
+        !Number.isSafeInteger(limit) || limit < 1 || limit > 100) {
+      throw new BadRequestException('Invalid page or limit');
+    }
+    const filter: Record<string, unknown> = {};
+    const term = (q || '').trim();
+    if (term) filter.name = { $regex: escapedSearch(term), $options: 'i' };
+    if (categoryId !== undefined) {
+      if (typeof categoryId !== 'string') throw new BadRequestException('Invalid category');
+      filter.categoryId = this.validId(categoryId);
+    }
+    // Avoid sending embedded USDA variant arrays with search results.
+    const [rows, total] = await Promise.all([
+      this.collection('foods').find(filter, { projection: {
+        name: 1, foodType: 1, categoryId: 1, tagIds: 1, nutritionPer100g: 1,
+        portions: 1, 'source.canonicalFdcId': 1, 'source.dataset': 1,
+      } }).sort({ name: 1, _id: 1 }).skip((page - 1) * limit).limit(limit).toArray(),
+      this.collection('foods').countDocuments(filter),
+    ]);
+    const ids = [...new Set(rows.flatMap(row => [row.categoryId,
+      ...(Array.isArray(row.tagIds) ? row.tagIds : [])].filter(Boolean).map(String)))];
+    const tagDocs = ids.length ? await this.collection('tags')
+      .find({ _id: { $in: ids.map(id => new Types.ObjectId(id)) } },
+        { projection: { slug: 1, label: 1, name: 1 } }).toArray() : [];
+    const tags = new Map(tagDocs.map(tag => [String(tag._id), tag]));
+    return { items: rows.map(row => foodForWorkspace(row, tags)), total,
+      page, limit, pages: Math.ceil(total / limit) };
   }
 
   @ApiSecurity('csrf')

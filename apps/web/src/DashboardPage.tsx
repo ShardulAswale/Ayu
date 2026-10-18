@@ -11,6 +11,7 @@ import {
   WorkspaceStats, workspaceApi,
 } from './workspace-client';
 import { dashboardPathForRole } from './role-routing.mjs';
+import { FoodCatalogueSection } from './FoodCatalogueSection';
 import { formatRecipeIngredients, displayText } from './recipe-format.mjs';
 import './workspace.css';
 
@@ -109,6 +110,7 @@ export function DashboardPage() {
   const [widgets, setWidgets] = React.useState<string[]>(defaultWidgets);
   const [editingWidgets, setEditingWidgets] = React.useState(false);
   const [recipeSearch, setRecipeSearch] = React.useState('');
+  const [libraryTab, setLibraryTab] = React.useState<'foods' | 'recipes'>('foods');
   const [recipeEditing, setRecipeEditing] = React.useState('');
   const [mealEditing, setMealEditing] = React.useState('');
   const [planEditing, setPlanEditing] = React.useState('');
@@ -398,9 +400,17 @@ export function DashboardPage() {
   const recipeLibrary = () => <div className="ws-stack">
     {pageHeading('Nutrition library', isPatient ? 'My recipes' : 'Foods & recipes',
       'Reusable foods and preparations with ingredient, serving and macronutrient information.',
-      isStaff && <button className="ws-primary" onClick={() => { setRecipeEditing(''); setRecipeForm({
+      isStaff && libraryTab === 'recipes' && <button className="ws-primary" onClick={() => { setRecipeEditing(''); setRecipeForm({
         name:'',ingredients:'',instructions:'',calories:'0',protein:'0',carbs:'0',fat:'0',fiber:'0',allergens:'',source:'',
       }); setFormOpen(true); }}><Plus size={16}/> Add recipe</button>)}
+    <div className="ws-tabs" role="tablist" aria-label="Food library sections">
+      <button type="button" role="tab" aria-selected={libraryTab === 'foods'} className={libraryTab === 'foods' ? 'active' : ''}
+        onClick={() => { setLibraryTab('foods'); setFormOpen(false); }}>Individual foods</button>
+      <button type="button" role="tab" aria-selected={libraryTab === 'recipes'} className={libraryTab === 'recipes' ? 'active' : ''}
+        onClick={() => { setLibraryTab('recipes'); setFormOpen(false); }}>Recipes</button>
+    </div>
+    {libraryTab === 'foods' && <FoodCatalogueSection/>}
+    {libraryTab === 'recipes' && <React.Fragment>
     {isStaff && formOpen && <form className="ws-card ws-form" onSubmit={event => {
       event.preventDefault();
       const data = {
@@ -433,17 +443,18 @@ export function DashboardPage() {
         <div className="ws-table-wrap"><table className="ws-table"><thead><tr><th>Food / recipe</th><th>Calories</th><th>Protein</th><th>Carbs</th><th>Fat</th><th>Fiber</th>{isStaff && <th>Actions</th>}</tr></thead>
           <tbody>{recipes.filter(r => (r.name + ' ' + formatRecipeIngredients(r.ingredients)).toLowerCase().includes(recipeSearch.toLowerCase())).map(recipe =>
             <tr key={recipe.id}><td><strong>{recipe.name}</strong><small>{formatRecipeIngredients(recipe.ingredients)}</small>{Boolean(recipe.allergens) && <small>Allergens: {displayText(recipe.allergens)}</small>}</td>
-              <td>{int(recipe.calories)} kcal</td><td>{int(recipe.protein)} g</td><td>{int(recipe.carbs)} g</td><td>{int(recipe.fat)} g</td><td>{int(recipe.fiber)} g</td>
+              <td>{recipe.calories == null ? '—' : int(recipe.calories) + ' kcal'}</td><td>{recipe.protein == null ? '—' : int(recipe.protein) + ' g'}</td><td>{recipe.carbs == null ? '—' : int(recipe.carbs) + ' g'}</td><td>{recipe.fat == null ? '—' : int(recipe.fat) + ' g'}</td><td>{recipe.fiber == null ? '—' : int(recipe.fiber) + ' g'}</td>
               {isStaff && <td><div className="ws-inline-actions">
                 <button type="button" onClick={() => { setRecipeEditing(recipe.id); setRecipeForm({
                   name:recipe.name,ingredients:formatRecipeIngredients(recipe.ingredients),instructions:displayText(recipe.instructions),
-                  calories:String(recipe.calories),protein:String(recipe.protein),carbs:String(recipe.carbs),
-                  fat:String(recipe.fat),fiber:String(recipe.fiber),allergens:displayText(recipe.allergens),source:displayText(recipe.source),
+                  calories:String(recipe.calories ?? ''),protein:String(recipe.protein ?? ''),carbs:String(recipe.carbs ?? ''),
+                  fat:String(recipe.fat ?? ''),fiber:String(recipe.fiber ?? ''),allergens:displayText(recipe.allergens),source:displayText(recipe.source),
                 });setFormOpen(true); }}>Edit</button>
                 <button type="button" onClick={() => { if (window.confirm('Delete recipe? Existing food entries keep their recorded snapshot.')) void mutate('Recipe removed.', () => workspaceApi('recipes/' + recipe.id,'DELETE')); }}>Remove</button>
               </div></td>}
             </tr>)}</tbody></table></div>}
     </div>
+    </React.Fragment>}
   </div>;
 
   const appointmentsPage = () => <div className="ws-stack">
@@ -611,7 +622,7 @@ export function DashboardPage() {
       'food-diary': ['entries'], 'my-diet-plan': ['plans'], 'nutrition-insights': ['stats'],
       progress: ['progress'], appointments: ['appointments'], patients: ['patients'],
       'patient-overview': ['patients', 'entries', 'plans', 'progress'],
-      'diet-plan-builder': ['patients', 'plans'], recipes: ['recipes'], reports: ['stats'],
+      'diet-plan-builder': ['patients', 'plans'], recipes: libraryTab === 'recipes' ? ['recipes'] : [], reports: ['stats'],
     };
     const missing = (dependencies[validView] || []).filter(key => failedSections.includes(key));
     if (missing.length || (validView === 'home' && !stats)) return <div className="ws-card">

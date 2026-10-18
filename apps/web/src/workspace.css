@@ -158,3 +158,9 @@
   .ws-form-actions{flex-direction:column}
   .ws-widget-option{flex-wrap:wrap}
 }
+
+.ws-catalogue-status{padding:22px 8px;color:#566c5e;display:flex;gap:14px;align-items:center}
+.ws-catalogue-pagination{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-top:18px;color:#506b57;font-size:13px}
+.ws-catalogue-pagination button{display:flex;align-items:center;gap:6px}
+.ws-tabs{margin-bottom:18px}
+@media(max-width:700px){.ws-catalogue-pagination{flex-wrap:wrap}.ws-catalogue-pagination span{order:-1;width:100%;text-align:center}}

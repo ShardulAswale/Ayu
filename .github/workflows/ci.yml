@@ -21,5 +21,6 @@ jobs:
       - run: npm run typecheck
       - run: npm run test:routing
       - run: npm run test:recipes
+      - run: npm run test:catalogue
       - run: npm run build
       - run: npm audit --omit=dev --audit-level=high
