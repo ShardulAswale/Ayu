@@ -580,14 +580,22 @@ export function DashboardPage() {
     <div className="ws-card"><div className="ws-section-title"><h2>Patient directory</h2><span>{patients.length} patients</span></div>
       {patients.length === 0 ? <Empty title="0 patients" description="No authorized patient accounts available." icon={Users}/> :
         <div className="ws-list">{patients.map(p => <div className="ws-list-row" key={p.id}>
-          <div className="ws-initial">{p.email[0].toUpperCase()}</div>
-          <div className="ws-list-text"><strong>{p.email}</strong><span>{p.active ? 'Active' : 'Inactive'} patient account</span></div>
-          {role === 'admin' && <label className="ws-select-inline">Active
-            <input type="checkbox" role="switch" aria-label={'Activate ' + p.email} checked={p.active} disabled={busy}
-              onChange={e => void mutate(e.target.checked ? 'Patient activated.' : 'Patient deactivated.',
-                () => workspaceApi('patients/' + p.id + '/status', 'PATCH', {active:e.target.checked}))}/>
-          </label>}
-          {p.active && <button className="ws-secondary" onClick={() => { setSelectedPatient(p.id);navigate('patient-overview'); }}>Open overview <ArrowRight size={14}/></button>}
+          <button type="button" className="ws-patient-profile-link" disabled={!p.active}
+            title={p.active ? 'Open patient profile' : 'Activate this patient to open their profile'}
+            aria-label={'Open profile for ' + p.email}
+            onClick={() => { setSelectedPatient(p.id);navigate('patient-overview'); }}>
+            <span className="ws-initial">{p.email[0].toUpperCase()}</span>
+            <span className="ws-list-text"><strong>{p.email}</strong><span>{p.active ? 'Active' : 'Inactive'} patient account</span></span>
+          </button>
+          {role === 'admin' && <button type="button"
+            className={p.active ? 'ws-patient-status ws-patient-status--active' : 'ws-patient-status ws-patient-status--inactive'}
+            aria-label={(p.active ? 'Deactivate ' : 'Activate ') + p.email}
+            title={p.active ? 'Click to deactivate account' : 'Click to activate account'}
+            disabled={busy}
+            onClick={() => void mutate(p.active ? 'Patient deactivated.' : 'Patient activated.',
+              () => workspaceApi('patients/' + p.id + '/status', 'PATCH', {active:!p.active}))}>
+            {p.active ? 'Active' : 'Inactive'}
+          </button>}
           {role === 'admin' && <button type="button" className="ws-icon-button" aria-label={'Delete ' + p.email}
             disabled={busy} onClick={() => setPatientDelete(p)}><Trash2 size={16}/></button>}
         </div>)}</div>}
