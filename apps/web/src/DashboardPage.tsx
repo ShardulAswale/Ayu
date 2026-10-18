@@ -410,7 +410,7 @@ export function DashboardPage() {
         onClick={() => { setLibraryTab('recipes'); setFormOpen(false); }}>Recipes</button>
     </div>
     {libraryTab === 'foods' && <FoodCatalogueSection/>}
-    {libraryTab === 'recipes' && <React.Fragment>}
+    {libraryTab === 'recipes' && <React.Fragment>
     {isStaff && formOpen && <form className="ws-card ws-form" onSubmit={event => {
       event.preventDefault();
       const data = {
