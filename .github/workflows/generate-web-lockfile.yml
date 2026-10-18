@@ -1,0 +1,42 @@
+name: Generate frontend dependency lockfile
+
+on:
+  push:
+    branches:
+      - feature/web-lockfile-reproducible-build
+    paths:
+      - .github/workflows/generate-web-lockfile.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  generate-lockfile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Generate npm lockfile using official npm registry
+        run: |
+          npm --prefix apps/web install --package-lock-only --ignore-scripts --no-audit --no-fund
+        env:
+          npm_config_registry: https://registry.npmjs.org/
+          npm_config_cache: ${{ runner.temp }}/ayu-npm-cache
+      - name: Verify clean reproducible installation
+        run: npm --prefix apps/web ci --ignore-scripts --no-audit --no-fund
+        env:
+          npm_config_cache: ${{ runner.temp }}/ayu-npm-cache
+      - name: Commit frontend lockfile
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/web/package-lock.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Lock frontend dependencies for reproducible builds"
+            git push
+          fi
