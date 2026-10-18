@@ -164,3 +164,18 @@
 .ws-catalogue-pagination button{display:flex;align-items:center;gap:6px}
 .ws-tabs{margin-bottom:18px}
 @media(max-width:700px){.ws-catalogue-pagination{flex-wrap:wrap}.ws-catalogue-pagination span{order:-1;width:100%;text-align:center}}
+
+/* Patient directory: linked identity and two-state account control */
+.ws-patient-profile-link{display:flex;align-items:center;gap:12px;flex:1;min-width:0;text-align:left;background:transparent;border:0;border-radius:9px;padding:7px;cursor:pointer;color:inherit;font:inherit}
+.ws-patient-profile-link:not(:disabled):hover{background:#eaf4f0}
+.ws-patient-profile-link:not(:disabled):hover strong{text-decoration:underline}
+.ws-patient-profile-link:focus-visible,.ws-patient-status:focus-visible{outline:3px solid #3688ea;outline-offset:3px}
+.ws-patient-profile-link:disabled{cursor:not-allowed;opacity:.65}
+.ws-patient-profile-link .ws-initial{flex-shrink:0}
+.ws-patient-profile-link .ws-list-text{min-width:0}
+.ws-patient-status{border:0;border-radius:8px;padding:9px 14px;min-width:92px;font-size:13px;font-weight:700;cursor:pointer;color:#fff}
+.ws-patient-status--active{background:#2563eb}
+.ws-patient-status--inactive{background:#dc2626}
+.ws-patient-status:hover:not(:disabled){filter:brightness(.92)}
+.ws-patient-status:disabled{opacity:.6;cursor:wait}
+@media(max-width:700px){.ws-patient-status{min-width:76px;padding:8px 10px}}
