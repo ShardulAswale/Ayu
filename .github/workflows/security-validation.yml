@@ -1,0 +1,55 @@
+name: Core API and Security Checks
+on:
+  pull_request:
+    branches: [dev]
+  push:
+    branches: [feature/core-care-workflows-security]
+permissions:
+  contents: read
+jobs:
+  api:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install API dependencies
+        run: |
+          if [ -f apps/api/package-lock.json ]; then npm --prefix apps/api ci --no-audit --no-fund; else npm --prefix apps/api install --no-audit --no-fund; fi
+      - name: Type-check API
+        run: npm --prefix apps/api run typecheck
+      - name: Build API
+        run: npm --prefix apps/api run build
+      - name: Access-control and care-security tests
+        run: |
+          npm --prefix apps/api run test:workspace
+          node --test apps/api/tests/care-security.test.mjs
+          npm --prefix apps/api run test:session
+          npm --prefix apps/api run test:catalogue
+      - name: Production dependency audit (high+)
+        run: npm --prefix apps/api audit --omit=dev --audit-level=high
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm --prefix apps/web ci --no-audit --no-fund
+      - run: npm --prefix apps/web run typecheck
+      - run: npm --prefix apps/web run build
+      - name: Web runtime dependency audit (high+)
+        run: npm --prefix apps/web audit --omit=dev --audit-level=high
+  codeql:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+      - uses: github/codeql-action/analyze@v3
