@@ -13,6 +13,7 @@ import {
 import { dashboardPathForRole } from './role-routing.mjs';
 import { FoodCatalogueSection } from './FoodCatalogueSection';
 import { ClinicalNotesPanel, MessagingPanel } from './CarePanels';
+import { NutritionReportPanel } from './NutritionReportPanel';
 import { formatRecipeIngredients, displayText } from './recipe-format.mjs';
 import './workspace.css';
 
@@ -546,7 +547,7 @@ export function DashboardPage() {
         <div className="ws-patient-identity"><HeartPulse size={22}/><div><strong>{selectedPatientName}</strong><p>Assigned patient workspace</p></div></div>}
     </div>
     {scopedPatient && <>
-      <div className="ws-tabs">{['Overview','Food diary','Diet plan','Progress','Appointments','Messages','Clinical notes'].map(tab =>
+      <div className="ws-tabs">{['Overview','Food diary','Diet plan','Progress','Appointments','Messages','Clinical notes','Nutrition report'].map(tab =>
         <button key={tab} className={selectedTab === tab ? 'active' : ''} onClick={() => { setSelectedTab(tab);setFormOpen(false); }}>{tab}</button>)}</div>
       {selectedTab === 'Overview' && <div className="ws-grid-two">
         <div className="ws-card"><h2>Food diary</h2><Empty title={int(entries.length) + ' entries'} description="The patient’s chronological food log." icon={UtensilsCrossed}/></div>
@@ -560,6 +561,7 @@ export function DashboardPage() {
       {selectedTab === 'Appointments' && appointmentsPage()}
       {selectedTab === 'Messages' && <MessagingPanel key={'messages:' + selectedPatient} patientId={selectedPatient} patientLabel={selectedPatientName}/>}
       {selectedTab === 'Clinical notes' && <ClinicalNotesPanel key={'notes:' + selectedPatient} patientId={selectedPatient}/>} 
+      {selectedTab === 'Nutrition report' && <NutritionReportPanel key={'report:' + selectedPatient} patientId={selectedPatient}/>} 
     </>}
   </div>;
 
@@ -678,8 +680,12 @@ export function DashboardPage() {
       </div></div>
   </div>;
 
-  const reportsPage = () => <div className="ws-stack">{pageHeading('Practice insights','Reports','Summary metrics from authorized data sources.')}
-    {renderMetrics(allWidgets.slice(0,4))}<div className="ws-card"><Empty title="0 generated reports" description="Exportable reports will be available once report generation is integrated." icon={ClipboardList}/></div></div>;
+  const reportsPage = () => <div className="ws-stack">{pageHeading('Practice insights','Reports','Nutrition from recorded diary entries without estimated values.')}
+    {renderMetrics(allWidgets.slice(0,4))}
+    <div className="ws-card">{choosePatient}</div>
+    {selectedPatient ? <NutritionReportPanel key={'staff-report:' + selectedPatient} patientId={selectedPatient}/> :
+      <Empty title="Select patient" description="Select an authorised patient to generate a nutrition report." icon={ClipboardList}/>}
+  </div>;
   const insightsPage = () => <div className="ws-stack">{pageHeading('Nutrition insights','Your food insights',
     'Totals from food logs that reference recipes with recorded nutrient information.')}
     <div className="ws-metrics">
@@ -687,7 +693,7 @@ export function DashboardPage() {
       <Metric name="Known energy" value={int(stats?.values.calories) + ' kcal'} note="Unestimated foods excluded" icon={Activity}/>
       <Metric name="Known protein" value={int(stats?.values.protein) + ' g'} note="Unestimated foods excluded" icon={HeartPulse}/>
     </div>
-    <div className="ws-card"><Empty title="0 trend charts" description="Trends will be displayed when enough validated nutrition data is available." icon={ChartNoAxesCombined}/></div>
+    <NutritionReportPanel/>
   </div>;
 
   const content = () => {
