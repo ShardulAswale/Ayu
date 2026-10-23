@@ -1,0 +1,52 @@
+name: Meal Image and Diet Plan Security
+on:
+  pull_request:
+    branches: [dev]
+  push:
+    branches: [feature/meal-vision-and-plan-workflows]
+permissions:
+  contents: read
+jobs:
+  image-and-plan-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install API dependencies
+        run: npm --prefix apps/api install --no-audit --no-fund
+      - name: Build API and verify types
+        run: |
+          npm --prefix apps/api run typecheck
+          npm --prefix apps/api run build
+      - name: Image validation and access-control tests
+        run: npm --prefix apps/api run test:meal-security
+      - name: Plan template and cross-patient tests
+        run: npm --prefix apps/api run test:plan-workflows
+      - name: Existing patient authorization tests
+        run: npm --prefix apps/api run test:workspace
+      - name: Audit production dependencies
+        run: npm --prefix apps/api audit --omit=dev --audit-level=high
+  ui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm --prefix apps/web ci --no-audit --no-fund
+      - run: npm --prefix apps/web run typecheck
+      - run: npm --prefix apps/web run build
+  codeql:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+      - uses: github/codeql-action/analyze@v3
