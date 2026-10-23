@@ -172,10 +172,28 @@ export class PlanWorkflowsController {
   async publish(@Req() req: Request, @Body() dto: PublishPlanWeekDto) {
     const { id,staff } = await this.patient(req,dto.patientId);
     const { first,last } = datesForWeek(dto.weekStart);
-    const result = await this.db().collection('DietPlans').updateMany({
+    const selected = await this.db().collection('DietPlans').find({
       patientId:id,plannedAt:{$gte:first,$lt:last},status:'draft',
-    },{ $set:{status:'published',updatedAt:new Date(),publishedBy:staff.id,publishedAt:new Date()} });
-    return { published:result.modifiedCount };
+    }).sort({plannedAt:1}).limit(101).toArray();
+    if (selected.length > 100) throw new BadRequestException('Publish at most 100 draft recommendations at once');
+    const revisions: Record<string, unknown>[] = [];
+    const now = new Date();
+    for (const record of selected) {
+      const result = await this.db().collection('DietPlans').updateOne({
+        _id:record._id,patientId:id,status:'draft',
+      },{ $set:{status:'published',updatedAt:now,publishedBy:staff.id,publishedAt:now},
+        $inc:{revision:1} });
+      if (result.modifiedCount) revisions.push({
+        planId:record._id,patientId:id,operation:'published',
+        before:{title:record.title,plannedAt:record.plannedAt,notes:record.notes,
+          status:'draft',recipeId:record.recipeId},
+        after:{title:record.title,plannedAt:record.plannedAt,notes:record.notes,
+          status:'published',recipeId:record.recipeId},
+        actorId:staff.id,createdAt:now,
+      });
+    }
+    if (revisions.length) await this.db().collection('DietPlanRevisions').insertMany(revisions);
+    return { published:revisions.length };
   }
 
   @Get('plans/:id/history')
