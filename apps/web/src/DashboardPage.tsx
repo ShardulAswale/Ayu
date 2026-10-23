@@ -134,6 +134,7 @@ export function DashboardPage() {
   const [planForm, setPlanForm] = React.useState({
     title: '', plannedAt: localDateTime(new Date()), notes: '', status: 'draft', recipeId: '',
   });
+  const [appointmentEditing, setAppointmentEditing] = React.useState('');
   const [visitForm, setVisitForm] = React.useState({
     title: '', startsAt: localDateTime(new Date()), durationMinutes: '30', dietitianId: '',
   });
@@ -490,28 +491,42 @@ export function DashboardPage() {
 
   const appointmentsPage = () => <div className="ws-stack">
     {pageHeading('Consultations','Appointments','Upcoming meetings and consultation scheduling.',
-      isStaff && <button className="ws-primary" onClick={() => setFormOpen(!formOpen)}><Plus size={16}/> Schedule meeting</button>)}
+      isStaff && <button className="ws-primary" onClick={() => {setAppointmentEditing('');setFormOpen(!formOpen);}}><Plus size={16}/> Schedule meeting</button>)}
     {isStaff && formOpen && <form className="ws-card ws-form" onSubmit={event => {
       event.preventDefault();
       const clinician = role === 'dietitian' ? user.id : visitForm.dietitianId;
-      void mutate('Appointment scheduled.', () => workspaceApi('appointments','POST',{
-        patientId:selectedPatient,dietitianId:clinician,startsAt:new Date(visitForm.startsAt).toISOString(),
-        title:visitForm.title,durationMinutes:Number(visitForm.durationMinutes),
-      }));
+      void mutate(appointmentEditing ? 'Appointment updated.' : 'Appointment scheduled.', async () => {
+        if (appointmentEditing) await workspaceApi('appointments/' + appointmentEditing, 'PATCH', {
+          startsAt:new Date(visitForm.startsAt).toISOString(),title:visitForm.title,
+          durationMinutes:Number(visitForm.durationMinutes),
+        });
+        else await workspaceApi('appointments','POST',{
+          patientId:selectedPatient,dietitianId:clinician,startsAt:new Date(visitForm.startsAt).toISOString(),
+          title:visitForm.title,durationMinutes:Number(visitForm.durationMinutes),
+        });
+        setAppointmentEditing('');
+      });
     }}>
-      <h2>Schedule consultation</h2>
+      <h2>{appointmentEditing ? 'Reschedule consultation' : 'Schedule consultation'}</h2>
       <div className="ws-form-grid">
-        <label>Patient<select required value={selectedPatient} onChange={e => setSelectedPatient(e.target.value)}><option value="">Select patient</option>{patients.map(p => <option key={p.id} value={p.id}>{p.email}</option>)}</select></label>
-        {role === 'admin' && <label>Dietitian<select required value={visitForm.dietitianId} onChange={e => setVisitForm({ ...visitForm,dietitianId:e.target.value })}><option value="">Select dietitian</option>{dietitians.map(d => <option key={d.id} value={d.id}>{d.email}</option>)}</select></label>}
+        <label>Patient<select required disabled={Boolean(appointmentEditing)} value={selectedPatient} onChange={e => setSelectedPatient(e.target.value)}><option value="">Select patient</option>{patients.map(p => <option key={p.id} value={p.id}>{p.email}</option>)}</select></label>
+        {role === 'admin' && !appointmentEditing && <label>Dietitian<select required value={visitForm.dietitianId} onChange={e => setVisitForm({ ...visitForm,dietitianId:e.target.value })}><option value="">Select dietitian</option>{dietitians.map(d => <option key={d.id} value={d.id}>{d.email}</option>)}</select></label>}
         <label>Title<input required value={visitForm.title} maxLength={160} onChange={e => setVisitForm({ ...visitForm,title:e.target.value })}/></label>
         <label>Starts at<input required type="datetime-local" value={visitForm.startsAt} onChange={e => setVisitForm({ ...visitForm,startsAt:e.target.value })}/></label>
         <label>Duration (minutes)<input required type="number" min="15" max="240" step="1" value={visitForm.durationMinutes} onChange={e => setVisitForm({ ...visitForm,durationMinutes:e.target.value })}/></label>
-      </div><button className="ws-primary" disabled={busy}>Save appointment</button></form>}
+      </div><div className="ws-form-actions"><button className="ws-primary" disabled={busy}>{appointmentEditing ? 'Save changes' : 'Save appointment'}</button><button type="button" className="ws-secondary" onClick={() => {setFormOpen(false);setAppointmentEditing('');}}>Cancel</button></div></form>}
     <div className="ws-card"><div className="ws-section-title"><h2>Consultation schedule</h2><span>{appointments.length} meetings</span></div>
       {appointments.length === 0 ? <Empty title="0 appointments" description="No consultations are currently scheduled." icon={CalendarDays}/> :
         <div className="ws-list">{appointments.map(item => <article className="ws-list-row" key={item.id}>
           <div className="ws-time">{fmt(item.startsAt)}</div><div className="ws-list-text"><strong>{item.title}</strong>
             <span>{item.durationMinutes} minutes{isStaff ? ' · ' + (patients.find(p => p.id === String(item.patientId))?.email || 'Patient') : ''}</span></div>
+          {isStaff && <button type="button" className="ws-secondary" onClick={() => {
+            setAppointmentEditing(item.id);
+            setSelectedPatient(String(item.patientId));
+            setVisitForm({ title:item.title, startsAt:localDateTime(new Date(item.startsAt)),
+              durationMinutes:String(item.durationMinutes), dietitianId:item.dietitianId });
+            setFormOpen(true);
+          }}>Edit</button>}
           {isStaff && <button className="ws-icon-button" aria-label="Cancel appointment" onClick={() => { if (window.confirm('Delete this appointment?')) void mutate('Appointment removed.', () => workspaceApi('appointments/' + item.id,'DELETE')); }}><Trash2 size={16}/></button>}
         </article>)}</div>}
     </div>
