@@ -543,6 +543,40 @@ export class WorkspaceController {
     return { ok: true };
   }
 
+  // Deterministic diary totals; unknown nutrition is counted, never guessed.
+  @Get('nutrition-report')
+  async nutritionReport(@Req() req: Request, @Query('patientId') patient?: string,
+    @Query('days') daysRaw?: string) {
+    const patientId = await this.patientId(req, patient);
+    const days = daysRaw === undefined ? 30 : Number(daysRaw);
+    if (![7, 30, 90].includes(days)) throw new BadRequestException('Days must be 7, 30 or 90');
+    const since = new Date(Date.now() - days * 86400000);
+    const rows = await this.collection('entries').find({
+      patientId, eatenAt: { $gte: since, $lte: new Date() },
+    }, { projection: { eatenAt: 1, nutrition: 1, nutritionAvailable: 1 } })
+      .sort({ eatenAt: -1, _id: -1 }).limit(2500).toArray();
+    const daily = new Map<string, { date: string; known: number; unknown: number;
+      calories: number; protein: number; carbs: number; fat: number; fiber: number }>();
+    for (const row of rows) {
+      const date = new Date(row.eatenAt).toISOString().slice(0, 10);
+      const day = daily.get(date) || { date, known: 0, unknown: 0,
+        calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 };
+      if (!row.nutritionAvailable || !row.nutrition) day.unknown++;
+      else {
+        day.known++;
+        for (const key of ['calories', 'protein', 'carbs', 'fat', 'fiber'] as const) {
+          const value = row.nutrition[key];
+          if (typeof value === 'number' && Number.isFinite(value) && value >= 0) day[key] += value;
+        }
+      }
+      daily.set(date, day);
+    }
+    return { days, timezone: 'UTC', truncated: rows.length === 2500,
+      items: [...daily.values()].sort((a, b) => a.date.localeCompare(b.date)),
+      known: [...daily.values()].reduce((n, d) => n + d.known, 0),
+      unknown: [...daily.values()].reduce((n, d) => n + d.unknown, 0) };
+  }
+
   @Get('progress')
   async progress(@Req() req: Request, @Query('patientId') patient?: string) {
     const patientId = await this.patientId(req, patient);
