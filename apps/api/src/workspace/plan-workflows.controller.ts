@@ -108,6 +108,7 @@ export class PlanWorkflowsController {
     proposed: { title: string; plannedAt: Date; notes?: string; recipeId?: Types.ObjectId; source?: string }[]) {
     const { id,staff } = await this.patient(req,patientId);
     if (proposed.length > 42) throw new BadRequestException('Maximum 42 entries per operation');
+    if (!proposed.length) return { created:0, skipped:0, status:'draft' };
     const first = new Date(Math.min(...proposed.map(x=>x.plannedAt.getTime())));
     const last = new Date(Math.max(...proposed.map(x=>x.plannedAt.getTime())) + 1);
     const existing = await this.db().collection('DietPlans').find({
