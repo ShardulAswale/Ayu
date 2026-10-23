@@ -87,3 +87,8 @@ export class AppointmentEditDto {
 export class CreatePatientInviteDto {
   @ApiProperty({}) @IsEmail() @MaxLength(254) email!: string;
 }
+
+export class PatientProfileDto {
+  @ApiPropertyOptional({}) @IsOptional() @IsString() @MaxLength(120) displayName?: string;
+  @ApiPropertyOptional({}) @IsOptional() @IsString() @MaxLength(64) timezone?: string;
+}
