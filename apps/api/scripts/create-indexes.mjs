@@ -15,6 +15,7 @@ try {
   if (!db || db.databaseName !== 'Ayu') throw new Error('Unexpected database');
   await db.collection('AccountTokens').createIndex({ tokenHash: 1 }, { unique: true });
   await db.collection('AccountTokens').createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+  await db.collection('PatientProfiles').createIndex({ patientId: 1 }, { unique: true });
   await db.collection('PatientMessages').createIndex({ patientId: 1, createdAt: -1 });
   await db.collection('ClinicalNotes').createIndex({ patientId: 1, createdAt: -1 });
   await db.collection('AuditEvents').createIndex({ patientId: 1, createdAt: -1 });
