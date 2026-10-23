@@ -12,6 +12,8 @@ import {
 } from './workspace-client';
 import { dashboardPathForRole } from './role-routing.mjs';
 import { FoodCatalogueSection } from './FoodCatalogueSection';
+import { MealImagePanel } from './MealImagePanel';
+import { PlanHistoryButton, PlanWorkflowTools } from './PlanWorkflowTools';
 import { formatRecipeIngredients, displayText } from './recipe-format.mjs';
 import './workspace.css';
 
@@ -337,7 +339,8 @@ export function DashboardPage() {
           <div className="ws-list-text"><strong>{entry.foodName}</strong>
             <span>{entry.quantity} {entry.unit} · {entry.recipeId
               ? int(entry.nutrition?.calories) + ' kcal per entry' : 'Nutrients not calculated'}</span>
-            {entry.notes && <small>{entry.notes}</small>}</div>
+            {entry.notes && <small>{entry.notes}</small>}
+            <MealImagePanel entry={entry} writable={!staffMode} onUpdated={()=>{if(user)void reload(user,selectedPatient);}}/></div>
           {!staffMode && <button type="button" className="ws-secondary" onClick={() => {
             setMealEditing(entry.id);
             setMeal({
@@ -385,6 +388,8 @@ export function DashboardPage() {
         <button className="ws-secondary" type="button" onClick={() => setFormOpen(false)}>Cancel</button></div>
     </form>}
     {scopedPatient && <>
+      {staffMode && <PlanWorkflowTools key={'plan-tools:'+selectedPatient} patientId={selectedPatient}
+        calendarDate={calendarDate} plans={plans} onUpdated={()=>{if(user)void reload(user,selectedPatient);}}/>}
       <div className="ws-calendar-tools">
         <div className="ws-segment">{(['day','week','month'] as const).map(period =>
           <button type="button" className={calendarView === period ? 'active' : ''} key={period} onClick={() => setCalendarView(period)}>{period}</button>)}</div>
@@ -414,6 +419,7 @@ export function DashboardPage() {
                       setFormOpen(true);
                     }}>Edit</button>
                     {item.status === 'draft' && <button type="button" onClick={() => void mutate('Plan published.', () => workspaceApi('plans/' + item.id, 'PATCH', { status: 'published' }))}>Publish</button>}
+                    <PlanHistoryButton id={item.id}/>
                     <button type="button" aria-label="Delete recommendation" onClick={() => { if (window.confirm('Remove this recommendation?')) void mutate('Recommendation removed.', () => workspaceApi('plans/' + item.id,'DELETE')); }}>Remove</button>
                   </div>}
                 </div>)}
