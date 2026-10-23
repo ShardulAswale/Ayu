@@ -12,6 +12,7 @@ import {
 } from './workspace-client';
 import { dashboardPathForRole } from './role-routing.mjs';
 import { FoodCatalogueSection } from './FoodCatalogueSection';
+import { ClinicalNotesPanel, MessagingPanel } from './CarePanels';
 import { formatRecipeIngredients, displayText } from './recipe-format.mjs';
 import './workspace.css';
 
@@ -545,7 +546,7 @@ export function DashboardPage() {
         <div className="ws-patient-identity"><HeartPulse size={22}/><div><strong>{selectedPatientName}</strong><p>Assigned patient workspace</p></div></div>}
     </div>
     {scopedPatient && <>
-      <div className="ws-tabs">{['Overview','Food diary','Diet plan','Progress','Appointments','Messages'].map(tab =>
+      <div className="ws-tabs">{['Overview','Food diary','Diet plan','Progress','Appointments','Messages','Clinical notes'].map(tab =>
         <button key={tab} className={selectedTab === tab ? 'active' : ''} onClick={() => { setSelectedTab(tab);setFormOpen(false); }}>{tab}</button>)}</div>
       {selectedTab === 'Overview' && <div className="ws-grid-two">
         <div className="ws-card"><h2>Food diary</h2><Empty title={int(entries.length) + ' entries'} description="The patient’s chronological food log." icon={UtensilsCrossed}/></div>
@@ -557,10 +558,8 @@ export function DashboardPage() {
       {selectedTab === 'Diet plan' && dietPlan(true)}
       {selectedTab === 'Progress' && progressPage(true)}
       {selectedTab === 'Appointments' && appointmentsPage()}
-      {selectedTab === 'Messages' && <div className="ws-card" role="region" aria-label="Patient messages">
-        <div className="ws-section-title"><h2>Messages with {selectedPatientName}</h2></div>
-        <Empty title="No messages yet" description="Secure patient messaging is not yet connected. Conversation history and message sending will appear here when the messaging service is implemented." icon={MessageCircle}/>
-      </div>}
+      {selectedTab === 'Messages' && <MessagingPanel key={'messages:' + selectedPatient} patientId={selectedPatient} patientLabel={selectedPatientName}/>}
+      {selectedTab === 'Clinical notes' && <ClinicalNotesPanel key={'notes:' + selectedPatient} patientId={selectedPatient}/>} 
     </>}
   </div>;
 
@@ -720,7 +719,10 @@ export function DashboardPage() {
       case 'appointments': return appointmentsPage();
       case 'reports': return reportsPage();
       case 'messages': return <div className="ws-stack">{pageHeading('Communications','Messages','Secure patient and practitioner messages.')}
-        <div className="ws-card"><Empty title="0 conversations" description="Secure messaging is not yet connected. No sample messages are shown." icon={MessageCircle}/></div></div>;
+        {isStaff && <div className="ws-card">{choosePatient}</div>}
+        {scopedPatient ? <MessagingPanel key={'global-messages:' + selectedPatient} patientId={isPatient ? undefined : selectedPatient} patientLabel={isPatient ? undefined : selectedPatientName}/> :
+          <Empty title="Select patient" description="Choose a patient from your authorised directory to view their care conversation." icon={MessageCircle}/>}
+      </div>;
       case 'settings': return <div className="ws-stack">{pageHeading('Your workspace','Settings','Account identity and access.')}
         <div className="ws-card"><h2>Account</h2><p>Email: {user.email}</p><p>Role: {user.role}</p>
           <button className="ws-secondary" onClick={() => void logoutNow()}>Sign out</button></div></div>;
