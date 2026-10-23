@@ -1,13 +1,13 @@
 import { ApiTags, ApiSecurity } from '@nestjs/swagger';
 import { Body, Controller, Get, HttpCode, Post, Req, UseGuards, UnauthorizedException } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
-import { randomBytes } from 'node:crypto';
+import { InjectConnection, InjectModel } from '@nestjs/mongoose';
+import { Connection, Model } from 'mongoose';
+import { createHash, randomBytes } from 'node:crypto';
 import { Request } from 'express';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { AuthGuard } from './auth.guard';
 import { CsrfGuard } from './csrf.guard';
-import { LoginDto } from './login.dto';
+import { ActivatePatientDto, LoginDto } from './login.dto';
 import { PasswordService } from './password.service';
 import { User } from './user.schema';
 import { ConfigService } from '@nestjs/config';
@@ -20,6 +20,7 @@ export class AuthController {
     @InjectModel(User.name) private readonly users: Model<User>,
     private readonly passwords: PasswordService,
     private readonly config: ConfigService,
+    @InjectConnection() private readonly connection: Connection,
   ) {}
 
   @Get('csrf')
@@ -48,6 +49,31 @@ export class AuthController {
     req.session.csrfToken = randomBytes(32).toString('hex');
     await new Promise<void>((resolve, reject) => req.session.save(err => err ? reject(err) : resolve()));
     return { user: { id: user.id, email: user.email, role: user.role }, csrfToken: req.session.csrfToken };
+  }
+
+  @ApiSecurity('csrf')
+  @Post('activate')
+  @HttpCode(200)
+  @UseGuards(CsrfGuard, ThrottlerGuard)
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  async activate(@Body() body: ActivatePatientDto) {
+    // Password is hashed before the token is consumed to avoid burning valid tokens
+    // when Argon2 fails. Token is claimed atomically; replay is rejected.
+    const hash = await this.passwords.hash(body.password);
+    const tokenHash = createHash('sha256').update(body.token).digest('hex');
+    const now = new Date();
+    const token = await this.connection.db!.collection('AccountTokens').findOneAndUpdate({
+      tokenHash, purpose: 'patient-invite', expiresAt: { $gt: now }, usedAt: { $exists: false },
+    }, { $set: { usedAt: now } }, { returnDocument: 'before' });
+    if (!token) throw new UnauthorizedException('Invalid or expired invitation');
+    const result = await this.users.updateOne({
+      _id: token.userId, role: 'patient', active: false, deletedAt: { $exists: false },
+    }, { $set: { passwordHash: hash, active: true }, $inc: { sessionVersion: 1 } });
+    if (!result.matchedCount) throw new UnauthorizedException('Invitation cannot be activated');
+    await this.connection.db!.collection('AuditEvents').insertOne({
+      action: 'patient.activated', patientId: token.userId, resourceId: token._id, createdAt: now,
+    });
+    return { ok: true };
   }
 
   @Get('me')
