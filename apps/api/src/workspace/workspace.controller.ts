@@ -112,6 +112,24 @@ export class WorkspaceController {
     return records.map(r => ({ id: String(r._id), email: r.email, active: r.active }));
   }
 
+  private async issuePatientInvitation(userId: Types.ObjectId, adminId: Types.ObjectId) {
+    const now = new Date();
+    // Superseded links cannot be redeemed, even if still within the 48-hour window.
+    await this.collection('tokens').updateMany({
+      userId, purpose: 'patient-invite', usedAt: { $exists: false },
+    }, { $set: { usedAt: now } });
+    const token = randomBytes(32).toString('base64url');
+    const tokenHash = createHash('sha256').update(token).digest('hex');
+    const expiresAt = new Date(now.getTime() + 48 * 60 * 60 * 1000);
+    await this.collection('tokens').insertOne({
+      purpose: 'patient-invite', userId, tokenHash, expiresAt, createdBy: adminId, createdAt: now,
+    });
+    await this.collection('audits').insertOne({
+      action: 'patient.invited', actorId: adminId, patientId: userId, createdAt: now,
+    });
+    return { token, expiresAt };
+  }
+
   @ApiSecurity('csrf')
   @Post('patients/invitations')
   @Roles('admin')
@@ -131,18 +149,22 @@ export class WorkspaceController {
       if ((cause as { code?: number }).code === 11000) throw new ConflictException('Patient account already exists');
       throw cause;
     }
-    const token = randomBytes(32).toString('base64url');
-    const tokenHash = createHash('sha256').update(token).digest('hex');
-    const expiresAt = new Date(now.getTime() + 48 * 60 * 60 * 1000);
-    await this.collection('tokens').insertOne({
-      purpose: 'patient-invite', userId: patient._id, tokenHash, expiresAt,
-      createdBy: oid(req.session.userId!), createdAt: now,
-    });
-    await this.collection('audits').insertOne({
-      action: 'patient.invited', actorId: oid(req.session.userId!), patientId: patient._id, createdAt: now,
-    });
+    const invitation = await this.issuePatientInvitation(patient._id, oid(req.session.userId!));
     // Only returned to the authenticated administrator ONCE. Never store plaintext token.
-    return { id: String(patient._id), token, expiresAt };
+    return { id: String(patient._id), ...invitation };
+  }
+
+  @ApiSecurity('csrf')
+  @Post('patients/:id/invitations')
+  @Roles('admin')
+  @UseGuards(CsrfGuard, ThrottlerGuard)
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  async reissuePatientInvitation(@Req() req: Request, @Param('id') id: string) {
+    const user = await this.users.findOne({
+      _id: this.validId(id), role: 'patient', active: false, deletedAt: { $exists: false },
+    }).select('_id').lean();
+    if (!user) throw new NotFoundException('Inactive patient not found');
+    return this.issuePatientInvitation(user._id as Types.ObjectId, oid(req.session.userId!));
   }
 
   @ApiSecurity('csrf')
