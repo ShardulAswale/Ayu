@@ -59,12 +59,16 @@ export class AuthController {
   async activate(@Body() body: ActivatePatientDto) {
     // Password is hashed before the token is consumed to avoid burning valid tokens
     // when Argon2 fails. Token is claimed atomically; replay is rejected.
-    const hash = await this.passwords.hash(body.password);
     const tokenHash = createHash('sha256').update(body.token).digest('hex');
     const now = new Date();
-    const token = await this.connection.db!.collection('AccountTokens').findOneAndUpdate({
+    const condition = {
       tokenHash, purpose: 'patient-invite', expiresAt: { $gt: now }, usedAt: { $exists: false },
-    }, { $set: { usedAt: now } }, { returnDocument: 'before' });
+    };
+    const pending = await this.connection.db!.collection('AccountTokens').findOne(condition);
+    if (!pending) throw new UnauthorizedException('Invalid or expired invitation');
+    const hash = await this.passwords.hash(body.password);
+    const token = await this.connection.db!.collection('AccountTokens').findOneAndUpdate(
+      condition, { $set: { usedAt: new Date() } }, { returnDocument: 'before' });
     if (!token) throw new UnauthorizedException('Invalid or expired invitation');
     const result = await this.users.updateOne({
       _id: token.userId, role: 'patient', active: false, deletedAt: { $exists: false },
