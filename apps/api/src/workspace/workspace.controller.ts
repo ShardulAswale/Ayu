@@ -13,7 +13,7 @@ import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { User, UserRole } from '../auth/user.schema';
 import {
-  AppointmentDto, AssignmentDto, CreatePatientDto, PatientStatusDto, FoodEntryDto, LayoutDto, PlanEditDto,
+  AppointmentDto, AppointmentEditDto, AssignmentDto, ClinicalNoteDto, CreatePatientDto, PatientStatusDto, PatientMessageDto, FoodEntryDto, LayoutDto, PlanEditDto,
   PlanEntryDto, ProgressDto, RecipeDto,
 } from './workspace.dto';
 
@@ -21,7 +21,7 @@ const COLLECTION = {
   entries: 'FoodEntries', recipes: 'Recipes', plans: 'DietPlans',
   appointments: 'Appointments', assignments: 'PatientAssignments',
   layouts: 'DashboardLayouts', progress: 'ProgressEntries',
-  foods: 'Foods', tags: 'Tags',
+  foods: 'Foods', tags: 'Tags', messages: 'PatientMessages', notes: 'ClinicalNotes', audits: 'AuditEvents',
 } as const;
 const VALID_WIDGETS = [
   'patients', 'meetings', 'reviews', 'plans', 'activity', 'appointments', 'dietitians',
@@ -450,6 +450,96 @@ export class WorkspaceController {
     await this.patientId(req, String(item.patientId));
     if (user.role === 'dietitian' && String(item.dietitianId) !== user.id) throw new ForbiddenException();
     await this.collection('appointments').deleteOne({ _id: item._id });
+    return { ok: true };
+  }
+
+  // Care-team messages are scoped by the same patient-assignment policy as the food diary.
+  // No attachments, outbound notifications or third-party processors at this stage.
+  @Get('messages')
+  async messages(@Req() req: Request, @Query('patientId') patient?: string) {
+    const patientId = await this.patientId(req, patient);
+    return (await this.collection('messages').find({ patientId })
+      .sort({ createdAt: -1, _id: -1 }).limit(100).toArray()).reverse().map(out);
+  }
+
+  @ApiSecurity('csrf')
+  @Post('messages')
+  @UseGuards(CsrfGuard)
+  async sendMessage(@Req() req: Request, @Body() dto: PatientMessageDto) {
+    const user = await this.identity(req);
+    const patientId = await this.patientId(req, dto.patientId);
+    const body = dto.body.trim();
+    if (!body) throw new BadRequestException('Message cannot be blank');
+    const now = new Date();
+    const result = await this.collection('messages').insertOne({
+      patientId, senderId: oid(user.id), senderRole: user.role,
+      body, createdAt: now,
+    });
+    await this.collection('audits').insertOne({
+      action: 'message.sent', actorId: oid(user.id), patientId, resourceId: result.insertedId,
+      createdAt: now,
+    });
+    return { id: String(result.insertedId) };
+  }
+
+  // Clinical notes are PRIVATE to authorised practitioners, never included in patient views.
+  @Get('notes')
+  @Roles('admin', 'dietitian')
+  async clinicalNotes(@Req() req: Request, @Query('patientId') patient?: string) {
+    const patientId = await this.patientId(req, patient);
+    const user = await this.identity(req);
+    const notes = await this.collection('notes').find({ patientId, deletedAt: { $exists: false } })
+      .sort({ createdAt: -1, _id: -1 }).limit(100).toArray();
+    await this.collection('audits').insertOne({
+      action: 'notes.viewed', actorId: oid(user.id), patientId, createdAt: new Date(),
+    });
+    return notes.map(out);
+  }
+
+  @ApiSecurity('csrf')
+  @Post('notes')
+  @Roles('admin', 'dietitian')
+  @UseGuards(CsrfGuard)
+  async addClinicalNote(@Req() req: Request, @Body() dto: ClinicalNoteDto) {
+    const user = await this.staff(req);
+    const patientId = await this.patientId(req, dto.patientId);
+    const title = dto.title.trim();
+    const body = dto.body.trim();
+    if (!title || !body) throw new BadRequestException('Title and note body are required');
+    const now = new Date();
+    const result = await this.collection('notes').insertOne({
+      patientId, title, body, authorId: oid(user.id), createdAt: now, updatedAt: now,
+    });
+    await this.collection('audits').insertOne({
+      action: 'note.created', actorId: oid(user.id), patientId,
+      resourceId: result.insertedId, createdAt: now,
+    });
+    return { id: String(result.insertedId) };
+  }
+
+  @ApiSecurity('csrf')
+  @Patch('appointments/:id')
+  @Roles('admin', 'dietitian')
+  @UseGuards(CsrfGuard)
+  async editAppointment(@Req() req: Request, @Param('id') id: string, @Body() dto: AppointmentEditDto) {
+    const user = await this.staff(req);
+    const current = await this.collection('appointments').findOne({ _id: this.validId(id) });
+    if (!current) throw new NotFoundException();
+    await this.patientId(req, String(current.patientId));
+    if (user.role === 'dietitian' && String(current.dietitianId) !== user.id) throw new ForbiddenException();
+    if (!Object.keys(dto).length) throw new BadRequestException('No changes supplied');
+    const updates: Record<string, unknown> = { updatedAt: new Date() };
+    if (dto.title !== undefined) {
+      if (!dto.title.trim()) throw new BadRequestException('Title required');
+      updates.title = dto.title.trim();
+    }
+    if (dto.startsAt !== undefined) updates.startsAt = new Date(dto.startsAt);
+    if (dto.durationMinutes !== undefined) updates.durationMinutes = dto.durationMinutes;
+    await this.collection('appointments').updateOne({ _id: current._id }, { $set: updates });
+    await this.collection('audits').insertOne({
+      action: 'appointment.updated', actorId: oid(user.id), patientId: current.patientId,
+      resourceId: current._id, createdAt: new Date(),
+    });
     return { ok: true };
   }
 
