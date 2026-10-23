@@ -74,7 +74,7 @@ test('activation DTO requires long tokens and passwords', () => {
   assert.ok(errors.some(x => x.property === 'password'));
 });
 
-test('reissuing an inactive patient's invite invalidates previous tokens', async () => {
+test("reissuing an inactive patient's invite invalidates previous tokens", async () => {
   const { WorkspaceController } = require('../dist/workspace/workspace.controller.js');
   const { Types } = require('mongoose');
   let revoked = false;
