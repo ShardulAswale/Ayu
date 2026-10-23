@@ -72,3 +72,27 @@ test('local vision never sends an image externally when unconfigured',async()=>{
     else process.env.AYU_LOCAL_VISION_URL=prior;
   }
 });
+
+test('concurrent upload conflict removes the unreferenced new GridFS image',async()=>{
+  const removed=[];
+  const entry={_id:new ObjectId(entryId),patientId:new ObjectId(owner)};
+  const connection={db:{collection:name=>({
+    findOne:async()=>name==='FoodEntries'?entry:null,
+    updateOne:async()=>({matchedCount:0}),
+  })}};
+  const users={
+    findById:()=>query({_id:new ObjectId(owner),role:'patient'}),
+    findOne:()=>query({_id:new ObjectId(owner),role:'patient',active:true}),
+  };
+  const imageId=new ObjectId();
+  const imageService={
+    sanitise:async()=>Buffer.from('safe'),
+    save:async()=>imageId,
+    remove:async id=>removed.push(String(id)),
+  };
+  const c=new MealImageController(connection,users,imageService);
+  await assert.rejects(()=>c.upload({session:{userId:owner}},entryId,{
+    buffer:Buffer.from([255,216,255]),size:3,mimetype:'image/jpeg',
+  }),{name:'ConflictException'});
+  assert.deepEqual(removed,[String(imageId)]);
+});
