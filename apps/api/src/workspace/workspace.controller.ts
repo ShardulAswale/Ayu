@@ -1,3 +1,4 @@
+import { createHash, randomBytes } from 'node:crypto';
 import { ApiTags, ApiCookieAuth, ApiSecurity } from '@nestjs/swagger';
 import {
   BadRequestException, Body, ConflictException, Controller, Delete, ForbiddenException, Get,
@@ -13,7 +14,7 @@ import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { User, UserRole } from '../auth/user.schema';
 import {
-  AppointmentDto, AppointmentEditDto, AssignmentDto, ClinicalNoteDto, CreatePatientDto, PatientStatusDto, PatientMessageDto, FoodEntryDto, LayoutDto, PlanEditDto,
+  AppointmentDto, AppointmentEditDto, AssignmentDto, ClinicalNoteDto, CreatePatientDto, CreatePatientInviteDto, PatientStatusDto, PatientMessageDto, FoodEntryDto, LayoutDto, PlanEditDto,
   PlanEntryDto, ProgressDto, RecipeDto,
 } from './workspace.dto';
 
@@ -21,7 +22,7 @@ const COLLECTION = {
   entries: 'FoodEntries', recipes: 'Recipes', plans: 'DietPlans',
   appointments: 'Appointments', assignments: 'PatientAssignments',
   layouts: 'DashboardLayouts', progress: 'ProgressEntries',
-  foods: 'Foods', tags: 'Tags', messages: 'PatientMessages', notes: 'ClinicalNotes', audits: 'AuditEvents',
+  foods: 'Foods', tags: 'Tags', messages: 'PatientMessages', notes: 'ClinicalNotes', audits: 'AuditEvents', tokens: 'AccountTokens',
 } as const;
 const VALID_WIDGETS = [
   'patients', 'meetings', 'reviews', 'plans', 'activity', 'appointments', 'dietitians',
@@ -108,6 +109,38 @@ export class WorkspaceController {
       role: 'patient', deletedAt: { $exists: false }, ...(user.role !== 'admin' ? { active: true } : {}), ...(ids ? { _id: { $in: ids } } : {}),
     }).select('email active').sort({ email: 1 }).limit(500).lean();
     return records.map(r => ({ id: String(r._id), email: r.email, active: r.active }));
+  }
+
+  @ApiSecurity('csrf')
+  @Post('patients/invitations')
+  @Roles('admin')
+  @UseGuards(CsrfGuard)
+  async invitePatient(@Req() req: Request, @Body() dto: CreatePatientInviteDto) {
+    const email = dto.email.trim().toLowerCase();
+    if (await this.users.exists({ email })) throw new ConflictException('Patient account already exists');
+    const now = new Date();
+    // Placeholder password is never disclosed or used. The patient chooses a new one using
+    // a single-use invitation token. Tokens are hashed before storage.
+    const passwordHash = await this.passwords.hash(randomBytes(48).toString('hex'));
+    let patient;
+    try {
+      patient = await this.users.create({ email, passwordHash, role: 'patient', active: false, sessionVersion: 0 });
+    } catch (cause) {
+      if ((cause as { code?: number }).code === 11000) throw new ConflictException('Patient account already exists');
+      throw cause;
+    }
+    const token = randomBytes(32).toString('base64url');
+    const tokenHash = createHash('sha256').update(token).digest('hex');
+    const expiresAt = new Date(now.getTime() + 48 * 60 * 60 * 1000);
+    await this.collection('tokens').insertOne({
+      purpose: 'patient-invite', userId: patient._id, tokenHash, expiresAt,
+      createdBy: oid(req.session.userId!), createdAt: now,
+    });
+    await this.collection('audits').insertOne({
+      action: 'patient.invited', actorId: oid(req.session.userId!), patientId: patient._id, createdAt: now,
+    });
+    // Only returned to the authenticated administrator ONCE. Never store plaintext token.
+    return { id: String(patient._id), token, expiresAt };
   }
 
   @ApiSecurity('csrf')
