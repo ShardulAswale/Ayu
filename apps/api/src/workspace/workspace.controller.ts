@@ -138,7 +138,6 @@ export class WorkspaceController {
   async invitePatient(@Req() req: Request, @Body() dto: CreatePatientInviteDto) {
     const email = dto.email.trim().toLowerCase();
     if (await this.users.exists({ email })) throw new ConflictException('Patient account already exists');
-    const now = new Date();
     // Placeholder password is never disclosed or used. The patient chooses a new one using
     // a single-use invitation token. Tokens are hashed before storage.
     const passwordHash = await this.passwords.hash(randomBytes(48).toString('hex'));
