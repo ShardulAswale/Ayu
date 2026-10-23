@@ -13,7 +13,7 @@
 - External email, calendar, CGM, AI image models and data providers are not wired to these new features.
 
 ## Controls implemented in the branch
-1. **Invitation-only onboarding.** Admin generates 256-bit single-use invitation; SHA-256 hash stored (not raw token), 48-hour expiry, rate-limited anonymous activation protected by CSRF. User chooses password; Argon2id hashing with configured pepper. Atomic token claim prevents reuse. No automatic login on activation.
+1. **Invitation-only onboarding.** Admin generates or renews a 256-bit single-use invitation; prior links are revoked, SHA-256 hash stored (not raw token), 48-hour expiry, rate-limited anonymous activation protected by CSRF. User chooses password; Argon2id hashing with configured pepper. Atomic token claim prevents reuse. No automatic login on activation.
 2. **Messaging.** Authenticated patient/team messages; patient self-scope and assigned-clinician scope enforced through common `patientId` policy. Text-only, max 2,000 chars and write rate-limited.
 3. **Private clinical notes.** Practitioner-only read and create routes with assigned-patient checks; record access and creation write audit metadata. Notes are never returned in patient messaging or patient profile routes.
 4. **Patient profile.** Patients may edit only their own non-clinical name/time-zone fields; staff read requires patient authorization.
@@ -36,7 +36,8 @@
 | **Medium** | Messaging currently only returns the most recent 100 messages, no cursor pagination or edit/delete/redaction workflow. | Cursor pagination and a retention/redaction policy. |
 | **Medium** | Nutrient report caps rows at 2,500; values are UTC-dated and may omit entries beyond cap. | Aggregation pagination, patient time-zone reports and clear completeness semantics. |
 | **Medium** | No media upload pipeline yet; future image upload requires AV, MIME verification, object access, size limits and EXIF removal. | Design and test secure storage before permitting patient images. |
-| **Medium** | Patient invitations cannot currently be safely reissued through the UI. | Expire old tokens and create controlled invitation recovery. |
+| **Medium** | Patient activation links are manually shared and may be exposed by unsafe forwarding. | Replace manual delivery with verified provider-based email and log-suppression review. |
+| **Medium** | API dependency lockfile is absent until its generation workflow succeeds. | Commit and verify `apps/api/package-lock.json`; switch API builds to `npm ci`. |
 
 ## Security test plan after merging/deploying to a TEST environment
 - Create synthetic patients A and B, assigned/unassigned clinicians and admin.
