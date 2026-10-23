@@ -179,3 +179,25 @@
 .ws-patient-status:hover:not(:disabled){filter:brightness(.92)}
 .ws-patient-status:disabled{opacity:.6;cursor:wait}
 @media(max-width:700px){.ws-patient-status{min-width:76px;padding:8px 10px}}
+
+/* Private image handling and practitioner plan workbench */
+.ws-meal-photo{margin-top:10px;max-width:100%;border-top:1px solid #e4eae6;padding:10px 0}
+.ws-meal-photo summary{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:700;cursor:pointer}
+.ws-meal-photo p{font-size:11px;line-height:1.5;color:#5c7469;margin:9px 0}
+.ws-meal-photo .ws-meal-photo-error,.ws-care-error{color:#ad2929}
+.ws-meal-thumb{display:block;object-fit:cover;width:min(100%,320px);height:auto;max-height:250px;border-radius:9px;margin:9px 0}
+.ws-meal-upload{display:inline-flex;align-items:center;gap:7px;position:relative;cursor:pointer}
+.ws-meal-upload input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}
+.ws-meal-suggestions{display:flex;flex-direction:column;align-items:flex-start;gap:8px;margin-top:10px}
+.ws-meal-suggestions button{background:#e9f3ec;border:1px solid #b2cfbd;border-radius:8px;padding:7px 10px}
+.ws-plan-tools-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+.ws-plan-tools-grid>div{border:1px solid #e0e9df;border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.ws-plan-tools-grid h3{margin:0;font-size:14px}
+.ws-plan-tools-grid label{display:flex;flex-direction:column;gap:7px;font-size:12px}
+.ws-plan-tools-grid input,.ws-plan-tools-grid select{width:100%;padding:10px;background:#fff;color:#203d31;border:1px solid #c7d6c8;border-radius:7px}
+.ws-plan-tools-grid button{display:flex;gap:7px;align-items:center;justify-content:center}
+.ws-plan-saved summary{font-weight:700;cursor:pointer;padding:8px}
+.ws-plan-history{display:inline-flex;flex-direction:column;gap:4px;max-width:280px}
+.ws-plan-revisions{display:flex;flex-direction:column;gap:4px;max-height:180px;overflow:auto}
+.ws-plan-revisions small{font-size:10px;color:#44624f}
+@media(max-width:720px){.ws-plan-tools-grid{grid-template-columns:1fr}}
