@@ -3,6 +3,8 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 import { HealthController } from './health.controller';
+import { MealImageController } from './workspace/meal-image.controller';
+import { MealImageService } from './workspace/meal-image.service';
 import { WorkspaceController } from './workspace/workspace.controller';
 import { AuthModule } from './auth/auth.module';
 import { DashboardController } from './dashboard/dashboard.controller';
@@ -26,6 +28,7 @@ import { DashboardController } from './dashboard/dashboard.controller';
       },
     }),
   ],
-  controllers: [HealthController, DashboardController, WorkspaceController],
+  controllers: [HealthController, DashboardController, WorkspaceController, MealImageController],
+  providers: [MealImageService],
 })
 export class AppModule {}
