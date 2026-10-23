@@ -5,6 +5,7 @@ import {
   Injectable, NotFoundException, Param, Patch, Post, Put, Query, Req, UseGuards,
 } from '@nestjs/common';
 import { InjectConnection, InjectModel } from '@nestjs/mongoose';
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { Connection, Model, Types } from 'mongoose';
 import { Request } from 'express';
 import { PasswordService } from '../auth/password.service';
@@ -114,7 +115,8 @@ export class WorkspaceController {
   @ApiSecurity('csrf')
   @Post('patients/invitations')
   @Roles('admin')
-  @UseGuards(CsrfGuard)
+  @UseGuards(CsrfGuard, ThrottlerGuard)
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   async invitePatient(@Req() req: Request, @Body() dto: CreatePatientInviteDto) {
     const email = dto.email.trim().toLowerCase();
     if (await this.users.exists({ email })) throw new ConflictException('Patient account already exists');
@@ -497,7 +499,8 @@ export class WorkspaceController {
 
   @ApiSecurity('csrf')
   @Post('messages')
-  @UseGuards(CsrfGuard)
+  @UseGuards(CsrfGuard, ThrottlerGuard)
+  @Throttle({ default: { limit: 12, ttl: 60000 } })
   async sendMessage(@Req() req: Request, @Body() dto: PatientMessageDto) {
     const user = await this.identity(req);
     const patientId = await this.patientId(req, dto.patientId);
@@ -532,7 +535,8 @@ export class WorkspaceController {
   @ApiSecurity('csrf')
   @Post('notes')
   @Roles('admin', 'dietitian')
-  @UseGuards(CsrfGuard)
+  @UseGuards(CsrfGuard, ThrottlerGuard)
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
   async addClinicalNote(@Req() req: Request, @Body() dto: ClinicalNoteDto) {
     const user = await this.staff(req);
     const patientId = await this.patientId(req, dto.patientId);
