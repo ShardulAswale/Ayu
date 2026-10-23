@@ -14,6 +14,7 @@ import { dashboardPathForRole } from './role-routing.mjs';
 import { FoodCatalogueSection } from './FoodCatalogueSection';
 import { ClinicalNotesPanel, MessagingPanel } from './CarePanels';
 import { NutritionReportPanel } from './NutritionReportPanel';
+import { PatientProfilePanel } from './PatientProfilePanel';
 import { formatRecipeIngredients, displayText } from './recipe-format.mjs';
 import './workspace.css';
 
@@ -563,7 +564,7 @@ export function DashboardPage() {
         <div className="ws-patient-identity"><HeartPulse size={22}/><div><strong>{selectedPatientName}</strong><p>Assigned patient workspace</p></div></div>}
     </div>
     {scopedPatient && <>
-      <div className="ws-tabs">{['Overview','Food diary','Diet plan','Progress','Appointments','Messages','Clinical notes','Nutrition report'].map(tab =>
+      <div className="ws-tabs">{['Overview','Profile','Food diary','Diet plan','Progress','Appointments','Messages','Clinical notes','Nutrition report'].map(tab =>
         <button key={tab} className={selectedTab === tab ? 'active' : ''} onClick={() => { setSelectedTab(tab);setFormOpen(false); }}>{tab}</button>)}</div>
       {selectedTab === 'Overview' && <div className="ws-grid-two">
         <div className="ws-card"><h2>Food diary</h2><Empty title={int(entries.length) + ' entries'} description="The patient’s chronological food log." icon={UtensilsCrossed}/></div>
@@ -571,6 +572,7 @@ export function DashboardPage() {
         <div className="ws-card"><h2>Progress</h2><Empty title={int(progress.length) + ' measurements'} description="Recorded patient measurements." icon={Activity}/></div>
         <div className="ws-card"><h2>Appointments</h2><Empty title={int(appointments.length) + ' meetings'} description="Scheduled consultations." icon={Clock3}/></div>
       </div>}
+      {selectedTab === 'Profile' && <PatientProfilePanel key={'profile:' + selectedPatient} patientId={selectedPatient} editable={false}/>}
       {selectedTab === 'Food diary' && foodDiary(true)}
       {selectedTab === 'Diet plan' && dietPlan(true)}
       {selectedTab === 'Progress' && progressPage(true)}
@@ -759,7 +761,9 @@ export function DashboardPage() {
       </div>;
       case 'settings': return <div className="ws-stack">{pageHeading('Your workspace','Settings','Account identity and access.')}
         <div className="ws-card"><h2>Account</h2><p>Email: {user.email}</p><p>Role: {user.role}</p>
-          <button className="ws-secondary" onClick={() => void logoutNow()}>Sign out</button></div></div>;
+          <button className="ws-secondary" onClick={() => void logoutNow()}>Sign out</button></div>
+        {isPatient && <PatientProfilePanel editable={true}/>}
+      </div>;
       default: return homePage();
     }
   };
