@@ -73,3 +73,25 @@ test('activation DTO requires long tokens and passwords', () => {
   assert.ok(errors.some(x => x.property === 'token'));
   assert.ok(errors.some(x => x.property === 'password'));
 });
+
+test('reissuing an inactive patient's invite invalidates previous tokens', async () => {
+  const { WorkspaceController } = require('../dist/workspace/workspace.controller.js');
+  const { Types } = require('mongoose');
+  let revoked = false;
+  let issued;
+  const users = { findOne: () => ({
+    select: () => ({ lean: async () => ({ _id: new Types.ObjectId(userId) }) }),
+  }) };
+  const tokens = {
+    updateMany: async (filter, patch) => { assert.equal(filter.purpose, 'patient-invite'); revoked = true; },
+    insertOne: async doc => { issued = doc; return { insertedId: new Types.ObjectId() }; },
+  };
+  const audits = { insertOne: async () => ({}) };
+  const c = new WorkspaceController({ db: { collection: name =>
+    name === 'AccountTokens' ? tokens : audits } }, users, {});
+  const result = await c.reissuePatientInvitation({ session: { userId: '507f1f77bcf86cd799439011' } }, userId);
+  assert.equal(revoked, true);
+  assert.ok(result.token.length > 40);
+  assert.equal(issued.tokenHash, createHash('sha256').update(result.token).digest('hex'));
+  assert.ok(issued.expiresAt.getTime() > Date.now());
+});
