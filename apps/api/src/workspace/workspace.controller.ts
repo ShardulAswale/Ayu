@@ -193,6 +193,22 @@ export class WorkspaceController {
     return { ok: true };
   }
 
+  @Get('audit-events')
+  @Roles('admin')
+  async auditEvents(@Query('patientId') patient?: string) {
+    const filter = patient ? { patientId: this.validId(patient) } : {};
+    const events = await this.collection('audits').find(filter, {
+      projection: { action: 1, actorId: 1, patientId: 1, resourceId: 1, createdAt: 1 },
+    }).sort({ createdAt: -1, _id: -1 }).limit(200).toArray();
+    return events.map(e => ({
+      id: String(e._id), action: String(e.action || ''),
+      actorId: e.actorId ? String(e.actorId) : null,
+      patientId: e.patientId ? String(e.patientId) : null,
+      resourceId: e.resourceId ? String(e.resourceId) : null,
+      createdAt: e.createdAt,
+    }));
+  }
+
   @Get('patient-profile')
   async patientProfile(@Req() req: Request, @Query('patientId') patient?: string) {
     const patientId = await this.patientId(req, patient);
