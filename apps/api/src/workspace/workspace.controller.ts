@@ -15,7 +15,7 @@ import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { User, UserRole } from '../auth/user.schema';
 import {
-  AppointmentDto, AppointmentEditDto, AssignmentDto, ClinicalNoteDto, CreatePatientDto, CreatePatientInviteDto, PatientStatusDto, PatientProfileDto, PatientMessageDto, FoodEntryDto, LayoutDto, PlanEditDto,
+  AppointmentDto, AppointmentEditDto, AssignmentDto, ClinicalNoteDto, CreatePatientInviteDto, PatientStatusDto, PatientProfileDto, PatientMessageDto, FoodEntryDto, LayoutDto, PlanEditDto,
   PlanEntryDto, ProgressDto, RecipeDto,
 } from './workspace.dto';
 
@@ -143,23 +143,6 @@ export class WorkspaceController {
     });
     // Only returned to the authenticated administrator ONCE. Never store plaintext token.
     return { id: String(patient._id), token, expiresAt };
-  }
-
-  @ApiSecurity('csrf')
-  @Post('patients')
-  @Roles('admin')
-  @UseGuards(CsrfGuard)
-  async createPatient(@Body() dto: CreatePatientDto) {
-    const email = dto.email.trim().toLowerCase();
-    if (await this.users.exists({ email })) throw new ConflictException('Email is already registered');
-    const passwordHash = await this.passwords.hash(dto.password);
-    try {
-      const patient = await this.users.create({ email, passwordHash, role: 'patient', active: false, sessionVersion: 0 });
-      return { id: String(patient.id), email: patient.email, active: false };
-    } catch (error: any) {
-      if (error?.code === 11000) throw new ConflictException('Email is already registered');
-      throw error;
-    }
   }
 
   @ApiSecurity('csrf')
