@@ -15,6 +15,7 @@ import { FoodCatalogueSection } from './FoodCatalogueSection';
 import { ClinicalNotesPanel, MessagingPanel } from './CarePanels';
 import { NutritionReportPanel } from './NutritionReportPanel';
 import { PatientProfilePanel } from './PatientProfilePanel';
+import { ProgressTrend } from './ProgressTrend';
 import { formatRecipeIngredients, displayText } from './recipe-format.mjs';
 import './workspace.css';
 
@@ -549,6 +550,7 @@ export function DashboardPage() {
         <label>Unit<input required maxLength={20} value={progressForm.unit} onChange={e => setProgressForm({ ...progressForm,unit:e.target.value })}/></label>
         <label>When measured<input required type="datetime-local" value={progressForm.measuredAt} onChange={e => setProgressForm({ ...progressForm,measuredAt:e.target.value })}/></label>
       </div><button className="ws-primary" disabled={busy}>Save measurement</button></form>}
+    <ProgressTrend entries={progress}/>
     <div className="ws-card"><h2>Measurement history</h2>
       {progress.length === 0 ? <Empty title="0 progress records" description="Measurements appear here once logged." icon={Activity}/> :
         <div className="ws-list">{progress.map(p => <div className="ws-list-row" key={p.id}>
