@@ -67,6 +67,19 @@ export async function logout(csrfToken: string): Promise<void> {
   sessionCheck.reset();
 }
 
+export async function activatePatient(token: string, password: string): Promise<void> {
+  const csrfToken = await getCsrf();
+  const response = await authFetch(endpoint('/auth/activate'), {
+    method: 'POST', credentials: 'include', cache: 'no-store',
+    headers: { 'content-type': 'application/json', 'x-ayu-csrf': csrfToken },
+    body: JSON.stringify({ token, password }),
+  });
+  if (!response.ok) {
+    if (response.status === 401) throw new Error('This invitation has expired or already been used.');
+    return parseError(response);
+  }
+}
+
 export interface DashboardSummary {
   role: SessionUser['role'];
   metrics: { key: string; label: string; count: number; description: string }[];

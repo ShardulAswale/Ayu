@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { ArrowRight, CalendarDays, CheckCircle2, HeartPulse, Leaf, LockKeyhole, Menu, ShieldCheck, Sparkles, UtensilsCrossed } from 'lucide-react';
 import './styles.css';
 import { LoginPage } from './LoginPage';
+import { ActivatePage } from './ActivatePage';
 import { DashboardPage } from './DashboardPage';
 import { isDashboardPath } from './role-routing.mjs';
 
@@ -24,6 +25,7 @@ function App() {
   if (isDashboardPath(pathname) || route === '#dashboard') return <DashboardPage/>;
   if (pathname === '/admin') return <LegacyAdminRedirect/>;
   if (pathname === '/login' || route === '#login') return <LoginPage/>;
+  if (route.startsWith('#activate?')) return <ActivatePage token={new URLSearchParams(route.slice('#activate?'.length)).get('token') || ''}/>;
   if (route === '#signup') return <main className="ayu-signup-info" style={{maxWidth:520,margin:'12vh auto',padding:24,fontFamily:'sans-serif'}}><a href="/">← Ayu home</a><h1>Sign up for Ayu</h1><p>Registration is not open yet. Patient accounts will be created through a verified invitation, and dietitian accounts will require approval. No account is created on this page.</p><a className="primary-button" href="/login">Go to login <ArrowRight size={18}/></a></main>;
   return <>
     <header className="header"><div className="container header-inner"><a className="brand" href="#home" aria-label="Ayu home"><span className="brand-mark"><Leaf size={19}/></span>ayu<span className="brand-dot">.</span></a><nav className={menuOpen?'nav open':'nav'} aria-label="Main navigation"><a href="#approach" onClick={()=>setMenuOpen(false)}>Our approach</a><a href="#features" onClick={()=>setMenuOpen(false)}>What we're building</a><a href="#about" onClick={()=>setMenuOpen(false)}>About</a></nav><div className="header-auth"><a className="header-status" href="/login">Log in</a><a className="header-status" href="/#signup">Sign up</a></div><button className="menu-button" onClick={()=>setMenuOpen(v=>!v)} aria-label="Toggle navigation" aria-expanded={menuOpen}><Menu size={23}/></button></div></header>

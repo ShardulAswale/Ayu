@@ -10,7 +10,9 @@
     "test:workspace": "node --test tests/workspace-access.test.mjs",
     "test:smoke": "node -e \"require('./dist/app.module.js'); console.log('Nest module imports loaded')\"",
     "test:session": "node --test tests/session-binding.test.mjs",
-    "test:catalogue": "node --test tests/catalogue.test.mjs"
+    "test:catalogue": "node --test tests/catalogue.test.mjs",
+    "db:indexes": "node scripts/create-indexes.mjs",
+    "test:care": "node --test tests/care-security.test.mjs"
   },
   "dependencies": {
     "@nestjs/common": "^12.1.3",

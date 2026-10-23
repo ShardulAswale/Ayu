@@ -65,3 +65,30 @@ export class CreatePatientDto {
 export class PatientStatusDto {
   @ApiProperty({ type: Boolean }) @IsBoolean() active!: boolean;
 }
+
+/** Messages contain text only; attachments require a separate reviewed upload workflow. */
+export class PatientMessageDto {
+  @ApiPropertyOptional({}) @IsOptional() @IsMongoId() patientId?: string;
+  @ApiProperty({}) @IsString() @MinLength(1) @MaxLength(2000) body!: string;
+}
+
+export class ClinicalNoteDto {
+  @ApiProperty({}) @IsMongoId() patientId!: string;
+  @ApiProperty({}) @IsString() @MinLength(1) @MaxLength(160) title!: string;
+  @ApiProperty({}) @IsString() @MinLength(1) @MaxLength(10000) body!: string;
+}
+
+export class AppointmentEditDto {
+  @ApiPropertyOptional({}) @IsOptional() @IsDateString() startsAt?: string;
+  @ApiPropertyOptional({}) @IsOptional() @IsString() @MinLength(1) @MaxLength(160) title?: string;
+  @ApiPropertyOptional({ type: Number }) @IsOptional() @IsInt() @Min(15) @Max(240) durationMinutes?: number;
+}
+
+export class CreatePatientInviteDto {
+  @ApiProperty({}) @IsEmail() @MaxLength(254) email!: string;
+}
+
+export class PatientProfileDto {
+  @ApiPropertyOptional({}) @IsOptional() @IsString() @MaxLength(120) displayName?: string;
+  @ApiPropertyOptional({}) @IsOptional() @IsString() @MaxLength(64) timezone?: string;
+}

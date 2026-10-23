@@ -1,9 +1,11 @@
+import { createHash, randomBytes } from 'node:crypto';
 import { ApiTags, ApiCookieAuth, ApiSecurity } from '@nestjs/swagger';
 import {
   BadRequestException, Body, ConflictException, Controller, Delete, ForbiddenException, Get,
   Injectable, NotFoundException, Param, Patch, Post, Put, Query, Req, UseGuards,
 } from '@nestjs/common';
 import { InjectConnection, InjectModel } from '@nestjs/mongoose';
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { Connection, Model, Types } from 'mongoose';
 import { Request } from 'express';
 import { PasswordService } from '../auth/password.service';
@@ -13,7 +15,7 @@ import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { User, UserRole } from '../auth/user.schema';
 import {
-  AppointmentDto, AssignmentDto, CreatePatientDto, PatientStatusDto, FoodEntryDto, LayoutDto, PlanEditDto,
+  AppointmentDto, AppointmentEditDto, AssignmentDto, ClinicalNoteDto, CreatePatientInviteDto, PatientStatusDto, PatientProfileDto, PatientMessageDto, FoodEntryDto, LayoutDto, PlanEditDto,
   PlanEntryDto, ProgressDto, RecipeDto,
 } from './workspace.dto';
 
@@ -21,7 +23,7 @@ const COLLECTION = {
   entries: 'FoodEntries', recipes: 'Recipes', plans: 'DietPlans',
   appointments: 'Appointments', assignments: 'PatientAssignments',
   layouts: 'DashboardLayouts', progress: 'ProgressEntries',
-  foods: 'Foods', tags: 'Tags',
+  foods: 'Foods', tags: 'Tags', messages: 'PatientMessages', notes: 'ClinicalNotes', audits: 'AuditEvents', tokens: 'AccountTokens', profiles: 'PatientProfiles',
 } as const;
 const VALID_WIDGETS = [
   'patients', 'meetings', 'reviews', 'plans', 'activity', 'appointments', 'dietitians',
@@ -110,21 +112,58 @@ export class WorkspaceController {
     return records.map(r => ({ id: String(r._id), email: r.email, active: r.active }));
   }
 
+  private async issuePatientInvitation(userId: Types.ObjectId, adminId: Types.ObjectId) {
+    const now = new Date();
+    // Superseded links cannot be redeemed, even if still within the 48-hour window.
+    await this.collection('tokens').updateMany({
+      userId, purpose: 'patient-invite', usedAt: { $exists: false },
+    }, { $set: { usedAt: now } });
+    const token = randomBytes(32).toString('base64url');
+    const tokenHash = createHash('sha256').update(token).digest('hex');
+    const expiresAt = new Date(now.getTime() + 48 * 60 * 60 * 1000);
+    await this.collection('tokens').insertOne({
+      purpose: 'patient-invite', userId, tokenHash, expiresAt, createdBy: adminId, createdAt: now,
+    });
+    await this.collection('audits').insertOne({
+      action: 'patient.invited', actorId: adminId, patientId: userId, createdAt: now,
+    });
+    return { token, expiresAt };
+  }
+
   @ApiSecurity('csrf')
-  @Post('patients')
+  @Post('patients/invitations')
   @Roles('admin')
-  @UseGuards(CsrfGuard)
-  async createPatient(@Body() dto: CreatePatientDto) {
+  @UseGuards(CsrfGuard, ThrottlerGuard)
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  async invitePatient(@Req() req: Request, @Body() dto: CreatePatientInviteDto) {
     const email = dto.email.trim().toLowerCase();
-    if (await this.users.exists({ email })) throw new ConflictException('Email is already registered');
-    const passwordHash = await this.passwords.hash(dto.password);
+    if (await this.users.exists({ email })) throw new ConflictException('Patient account already exists');
+    // Placeholder password is never disclosed or used. The patient chooses a new one using
+    // a single-use invitation token. Tokens are hashed before storage.
+    const passwordHash = await this.passwords.hash(randomBytes(48).toString('hex'));
+    let patient;
     try {
-      const patient = await this.users.create({ email, passwordHash, role: 'patient', active: false, sessionVersion: 0 });
-      return { id: String(patient.id), email: patient.email, active: false };
-    } catch (error: any) {
-      if (error?.code === 11000) throw new ConflictException('Email is already registered');
-      throw error;
+      patient = await this.users.create({ email, passwordHash, role: 'patient', active: false, sessionVersion: 0 });
+    } catch (cause) {
+      if ((cause as { code?: number }).code === 11000) throw new ConflictException('Patient account already exists');
+      throw cause;
     }
+    const invitation = await this.issuePatientInvitation(patient._id, oid(req.session.userId!));
+    // Only returned to the authenticated administrator ONCE. Never store plaintext token.
+    return { id: String(patient._id), ...invitation };
+  }
+
+  @ApiSecurity('csrf')
+  @Post('patients/:id/invitations')
+  @Roles('admin')
+  @UseGuards(CsrfGuard, ThrottlerGuard)
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  async reissuePatientInvitation(@Req() req: Request, @Param('id') id: string) {
+    const user = await this.users.findOne({
+      _id: this.validId(id), role: 'patient', active: false, deletedAt: { $exists: false },
+    }).select('_id').lean();
+    if (!user) throw new NotFoundException('Inactive patient not found');
+    return this.issuePatientInvitation(user._id as Types.ObjectId, oid(req.session.userId!));
   }
 
   @ApiSecurity('csrf')
@@ -151,6 +190,52 @@ export class WorkspaceController {
       { $set: { active: false, deletedAt: new Date() }, $inc: { sessionVersion: 1 } },
     );
     if (!result.matchedCount) throw new NotFoundException('Patient not found');
+    return { ok: true };
+  }
+
+  @Get('audit-events')
+  @Roles('admin')
+  async auditEvents(@Query('patientId') patient?: string) {
+    const filter = patient ? { patientId: this.validId(patient) } : {};
+    const events = await this.collection('audits').find(filter, {
+      projection: { action: 1, actorId: 1, patientId: 1, resourceId: 1, createdAt: 1 },
+    }).sort({ createdAt: -1, _id: -1 }).limit(200).toArray();
+    return events.map(e => ({
+      id: String(e._id), action: String(e.action || ''),
+      actorId: e.actorId ? String(e.actorId) : null,
+      patientId: e.patientId ? String(e.patientId) : null,
+      resourceId: e.resourceId ? String(e.resourceId) : null,
+      createdAt: e.createdAt,
+    }));
+  }
+
+  @Get('patient-profile')
+  async patientProfile(@Req() req: Request, @Query('patientId') patient?: string) {
+    const patientId = await this.patientId(req, patient);
+    const record = await this.collection('profiles').findOne({ patientId });
+    return { patientId: String(patientId), displayName: record?.displayName || '',
+      timezone: record?.timezone || 'UTC' };
+  }
+
+  @ApiSecurity('csrf')
+  @Patch('patient-profile')
+  @Roles('patient')
+  @UseGuards(CsrfGuard)
+  async updateMyProfile(@Req() req: Request, @Body() dto: PatientProfileDto) {
+    const patientId = await this.patientId(req);
+    if (!Object.keys(dto).length) throw new BadRequestException('No profile changes supplied');
+    if (dto.timezone) {
+      try { new Intl.DateTimeFormat('en-US', { timeZone: dto.timezone }); }
+      catch { throw new BadRequestException('Invalid timezone'); }
+    }
+    const update: Record<string, unknown> = { updatedAt: new Date() };
+    if (dto.displayName !== undefined) update.displayName = dto.displayName.trim();
+    if (dto.timezone !== undefined) update.timezone = dto.timezone;
+    await this.collection('profiles').updateOne({ patientId },
+      { $set: update, $setOnInsert: { patientId, createdAt: new Date() } }, { upsert: true });
+    await this.collection('audits').insertOne({
+      action: 'profile.updated', actorId: patientId, patientId, createdAt: new Date(),
+    });
     return { ok: true };
   }
 
@@ -451,6 +536,132 @@ export class WorkspaceController {
     if (user.role === 'dietitian' && String(item.dietitianId) !== user.id) throw new ForbiddenException();
     await this.collection('appointments').deleteOne({ _id: item._id });
     return { ok: true };
+  }
+
+  // Care-team messages are scoped by the same patient-assignment policy as the food diary.
+  // No attachments, outbound notifications or third-party processors at this stage.
+  @Get('messages')
+  async messages(@Req() req: Request, @Query('patientId') patient?: string) {
+    const patientId = await this.patientId(req, patient);
+    return (await this.collection('messages').find({ patientId })
+      .sort({ createdAt: -1, _id: -1 }).limit(100).toArray()).reverse().map(out);
+  }
+
+  @ApiSecurity('csrf')
+  @Post('messages')
+  @UseGuards(CsrfGuard, ThrottlerGuard)
+  @Throttle({ default: { limit: 12, ttl: 60000 } })
+  async sendMessage(@Req() req: Request, @Body() dto: PatientMessageDto) {
+    const user = await this.identity(req);
+    const patientId = await this.patientId(req, dto.patientId);
+    const body = dto.body.trim();
+    if (!body) throw new BadRequestException('Message cannot be blank');
+    const now = new Date();
+    const result = await this.collection('messages').insertOne({
+      patientId, senderId: oid(user.id), senderRole: user.role,
+      body, createdAt: now,
+    });
+    await this.collection('audits').insertOne({
+      action: 'message.sent', actorId: oid(user.id), patientId, resourceId: result.insertedId,
+      createdAt: now,
+    });
+    return { id: String(result.insertedId) };
+  }
+
+  // Clinical notes are PRIVATE to authorised practitioners, never included in patient views.
+  @Get('notes')
+  @Roles('admin', 'dietitian')
+  async clinicalNotes(@Req() req: Request, @Query('patientId') patient?: string) {
+    const patientId = await this.patientId(req, patient);
+    const user = await this.identity(req);
+    const notes = await this.collection('notes').find({ patientId, deletedAt: { $exists: false } })
+      .sort({ createdAt: -1, _id: -1 }).limit(100).toArray();
+    await this.collection('audits').insertOne({
+      action: 'notes.viewed', actorId: oid(user.id), patientId, createdAt: new Date(),
+    });
+    return notes.map(out);
+  }
+
+  @ApiSecurity('csrf')
+  @Post('notes')
+  @Roles('admin', 'dietitian')
+  @UseGuards(CsrfGuard, ThrottlerGuard)
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
+  async addClinicalNote(@Req() req: Request, @Body() dto: ClinicalNoteDto) {
+    const user = await this.staff(req);
+    const patientId = await this.patientId(req, dto.patientId);
+    const title = dto.title.trim();
+    const body = dto.body.trim();
+    if (!title || !body) throw new BadRequestException('Title and note body are required');
+    const now = new Date();
+    const result = await this.collection('notes').insertOne({
+      patientId, title, body, authorId: oid(user.id), createdAt: now, updatedAt: now,
+    });
+    await this.collection('audits').insertOne({
+      action: 'note.created', actorId: oid(user.id), patientId,
+      resourceId: result.insertedId, createdAt: now,
+    });
+    return { id: String(result.insertedId) };
+  }
+
+  @ApiSecurity('csrf')
+  @Patch('appointments/:id')
+  @Roles('admin', 'dietitian')
+  @UseGuards(CsrfGuard)
+  async editAppointment(@Req() req: Request, @Param('id') id: string, @Body() dto: AppointmentEditDto) {
+    const user = await this.staff(req);
+    const current = await this.collection('appointments').findOne({ _id: this.validId(id) });
+    if (!current) throw new NotFoundException();
+    await this.patientId(req, String(current.patientId));
+    if (user.role === 'dietitian' && String(current.dietitianId) !== user.id) throw new ForbiddenException();
+    if (!Object.keys(dto).length) throw new BadRequestException('No changes supplied');
+    const updates: Record<string, unknown> = { updatedAt: new Date() };
+    if (dto.title !== undefined) {
+      if (!dto.title.trim()) throw new BadRequestException('Title required');
+      updates.title = dto.title.trim();
+    }
+    if (dto.startsAt !== undefined) updates.startsAt = new Date(dto.startsAt);
+    if (dto.durationMinutes !== undefined) updates.durationMinutes = dto.durationMinutes;
+    await this.collection('appointments').updateOne({ _id: current._id }, { $set: updates });
+    await this.collection('audits').insertOne({
+      action: 'appointment.updated', actorId: oid(user.id), patientId: current.patientId,
+      resourceId: current._id, createdAt: new Date(),
+    });
+    return { ok: true };
+  }
+
+  // Deterministic diary totals; unknown nutrition is counted, never guessed.
+  @Get('nutrition-report')
+  async nutritionReport(@Req() req: Request, @Query('patientId') patient?: string,
+    @Query('days') daysRaw?: string) {
+    const patientId = await this.patientId(req, patient);
+    const days = daysRaw === undefined ? 30 : Number(daysRaw);
+    if (![7, 30, 90].includes(days)) throw new BadRequestException('Days must be 7, 30 or 90');
+    const since = new Date(Date.now() - days * 86400000);
+    const rows = await this.collection('entries').find({
+      patientId, eatenAt: { $gte: since, $lte: new Date() },
+    }, { projection: { eatenAt: 1, nutrition: 1, nutritionAvailable: 1 } })
+      .sort({ eatenAt: -1, _id: -1 }).limit(2500).toArray();
+    const daily = new Map<string, { date: string; known: number; unknown: number;
+      calories: number; protein: number; carbs: number; fat: number; fiber: number }>();
+    for (const row of rows) {
+      const date = new Date(row.eatenAt).toISOString().slice(0, 10);
+      const day = daily.get(date) || { date, known: 0, unknown: 0,
+        calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 };
+      if (!row.nutritionAvailable || !row.nutrition) day.unknown++;
+      else {
+        day.known++;
+        for (const key of ['calories', 'protein', 'carbs', 'fat', 'fiber'] as const) {
+          const value = row.nutrition[key];
+          if (typeof value === 'number' && Number.isFinite(value) && value >= 0) day[key] += value;
+        }
+      }
+      daily.set(date, day);
+    }
+    return { days, timezone: 'UTC', truncated: rows.length === 2500,
+      items: [...daily.values()].sort((a, b) => a.date.localeCompare(b.date)),
+      known: [...daily.values()].reduce((n, d) => n + d.known, 0),
+      unknown: [...daily.values()].reduce((n, d) => n + d.unknown, 0) };
   }
 
   @Get('progress')
