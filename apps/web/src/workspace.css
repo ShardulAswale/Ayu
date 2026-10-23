@@ -193,3 +193,5 @@
 .ws-care-compose textarea,.ws-care-compose input{width:100%;border:1px solid #bccfc2;border-radius:8px;padding:10px;background:#fff;color:#213b32;resize:vertical}
 .ws-care-compose button{align-self:flex-end}
 .ws-care-error{color:#a72020!important}
+
+.ws-progress-chart{width:100%;height:auto;max-height:270px}
