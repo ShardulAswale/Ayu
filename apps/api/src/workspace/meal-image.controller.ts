@@ -1,4 +1,4 @@
-import { BadRequestException, Controller, Delete, ForbiddenException, Get, NotFoundException,
+import { BadRequestException, ConflictException, Controller, Delete, ForbiddenException, Get, NotFoundException,
   Param, Post, Req, Res, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { ApiCookieAuth, ApiSecurity, ApiTags } from '@nestjs/swagger';
 import { InjectConnection, InjectModel } from '@nestjs/mongoose';
@@ -66,8 +66,9 @@ export class MealImageController {
     try {
       const result = await this.connection.db!.collection('FoodEntries').updateOne({
         _id: entry._id, patientId,
+        ...(entry.imageId ? { imageId:entry.imageId } : { imageId:{$exists:false} }),
       }, { $set: { imageId, imageUpdatedAt: new Date(), imageOrigin:'patient' } });
-      if (!result.matchedCount) throw new NotFoundException('Entry no longer exists');
+      if (!result.matchedCount) throw new ConflictException('The entry or photo changed; reload and retry');
     } catch (error) { await this.images.remove(imageId); throw error; }
     if (entry.imageId) await this.images.remove(entry.imageId);
     // No source filename or EXIF metadata is retained in the DB or the returned body.
@@ -92,10 +93,12 @@ export class MealImageController {
   @UseGuards(CsrfGuard)
   async remove(@Req() req: Request, @Param('id') id: string) {
     const { entry, patientId } = await this.authorised(req,id);
-    await this.connection.db!.collection('FoodEntries').updateOne({
-      _id:entry._id, patientId,
+    if (!entry.imageId) return { ok:true };
+    const result = await this.connection.db!.collection('FoodEntries').updateOne({
+      _id:entry._id, patientId, imageId:entry.imageId,
     }, { $unset:{ imageId: '' }, $set: { imageUpdatedAt:new Date() } });
-    if (entry.imageId) await this.images.remove(entry.imageId);
+    if (!result.matchedCount) throw new ConflictException('Photo changed; reload and retry');
+    await this.images.remove(entry.imageId);
     return { ok:true };
   }
 
