@@ -25,6 +25,7 @@ jobs:
         run: |
           npm --prefix apps/api run test:workspace
           node --test apps/api/tests/care-security.test.mjs
+          node --test apps/api/tests/invite-security.test.mjs
           npm --prefix apps/api run test:session
           npm --prefix apps/api run test:catalogue
       - name: Production dependency audit (high+)
