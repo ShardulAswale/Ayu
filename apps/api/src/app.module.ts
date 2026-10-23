@@ -4,6 +4,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 import { HealthController } from './health.controller';
 import { MealImageController } from './workspace/meal-image.controller';
+import { PlanWorkflowsController } from './workspace/plan-workflows.controller';
 import { MealImageService } from './workspace/meal-image.service';
 import { WorkspaceController } from './workspace/workspace.controller';
 import { AuthModule } from './auth/auth.module';
@@ -28,7 +29,7 @@ import { DashboardController } from './dashboard/dashboard.controller';
       },
     }),
   ],
-  controllers: [HealthController, DashboardController, WorkspaceController, MealImageController],
+  controllers: [HealthController, DashboardController, WorkspaceController, MealImageController, PlanWorkflowsController],
   providers: [MealImageService],
 })
 export class AppModule {}
