@@ -1,7 +1,8 @@
 import { BadRequestException, Injectable, NotImplementedException, ServiceUnavailableException } from '@nestjs/common';
 import { InjectConnection } from '@nestjs/mongoose';
-import { Connection } from 'mongoose';
-import { GridFSBucket, ObjectId } from 'mongodb';
+import mongoose, { Connection } from 'mongoose';
+const { GridFSBucket, ObjectId } = mongoose.mongo;
+type ObjectId = mongoose.Types.ObjectId;
 import sharp from 'sharp';
 
 export const MAX_RAW_IMAGE_BYTES = 5 * 1024 * 1024;
@@ -54,11 +55,11 @@ export class MealImageService {
   }
 
   async remove(imageId?: ObjectId | string | null) {
-    if (!imageId || !ObjectId.isValid(imageId)) return;
+    if (!imageId || !mongoose.Types.ObjectId.isValid(String(imageId))) return;
     try { await this.bucket.delete(new ObjectId(String(imageId))); }
     catch (error) {
-      // Files can already have been removed by a previous retry.
-      if ((error as { code?: number }).code !== 'ENOENT') throw error;
+      // A retry can target a GridFS file already removed.
+      if (!String((error as Error).message).includes('FileNotFound')) throw error;
     }
   }
 
