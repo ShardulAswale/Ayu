@@ -142,7 +142,8 @@ export function DashboardPage() {
   });
   const [assignDietitian, setAssignDietitian] = React.useState('');
   const [patientCreateOpen, setPatientCreateOpen] = React.useState(false);
-  const [newPatient, setNewPatient] = React.useState({ email: '', password: '' });
+  const [newPatient, setNewPatient] = React.useState({ email: '' });
+  const [patientInviteLink, setPatientInviteLink] = React.useState('');
   const [patientDelete, setPatientDelete] = React.useState<PatientRef | null>(null);
 
   React.useEffect(() => {
@@ -571,17 +572,29 @@ export function DashboardPage() {
       role === 'admin' && <button className="ws-primary" type="button" onClick={() => setPatientCreateOpen(v => !v)}><Plus size={16}/> Create patient</button>)}
     {role === 'admin' && patientCreateOpen && <form className="ws-card ws-form" onSubmit={event => {
       event.preventDefault();
-      void mutate('Patient account created inactive. Activate only after securely sharing credentials and completing onboarding.',
-        async () => { await workspaceApi('patients', 'POST', { email: newPatient.email.trim(), password: newPatient.password }); setNewPatient({ email: '', password: '' }); setPatientCreateOpen(false); });
+      void mutate('Patient invitation created. Share the one-time link through a trusted channel.',
+        async () => {
+          const result = await workspaceApi<{ token: string; expiresAt: string }>('patients/invitations', 'POST', { email: newPatient.email.trim() });
+          setPatientInviteLink(window.location.origin + '/#activate?token=' + encodeURIComponent(result.token));
+          setNewPatient({ email: '' }); setPatientCreateOpen(false);
+        });
     }}>
-      <h2>Create patient account</h2><p>Accounts are created inactive. Use a strong temporary password and share it securely; invitation and password-setup emails are not implemented yet.</p>
+      <h2>Invite a patient</h2><p>Creates an inactive account and a single-use, 48-hour activation link. The patient chooses their own password. Email delivery is not connected; share privately.</p>
       <div className="ws-form-grid">
-        <label>Email<input type="email" required maxLength={254} autoComplete="off" value={newPatient.email} onChange={e => setNewPatient(v => ({...v,email:e.target.value}))}/></label>
-        <label>Temporary password<input type="password" required minLength={12} maxLength={128} autoComplete="new-password" value={newPatient.password} onChange={e => setNewPatient(v => ({...v,password:e.target.value}))}/></label>
+        <label>Email<input type="email" required maxLength={254} autoComplete="off" value={newPatient.email} onChange={e => setNewPatient({email:e.target.value})}/></label>
       </div>
-      <div className="ws-form-actions"><button className="ws-primary" disabled={busy}>Create inactive patient</button>
+      <div className="ws-form-actions"><button className="ws-primary" disabled={busy}>Create invitation</button>
         <button type="button" className="ws-secondary" onClick={() => setPatientCreateOpen(false)}>Cancel</button></div>
     </form>}
+    {role === 'admin' && patientInviteLink && <div className="ws-card ws-form">
+      <h2>One-time activation link</h2>
+      <p>Visible only in this browser until you navigate away or refresh. Expires after 48 hours. Never post it publicly.</p>
+      <input aria-label="Patient invitation link" readOnly value={patientInviteLink} onFocus={e=>e.currentTarget.select()}/>
+      <div className="ws-form-actions">
+        <button type="button" className="ws-secondary" onClick={() => { void navigator.clipboard.writeText(patientInviteLink); }}>Copy private link</button>
+        <button type="button" className="ws-secondary" onClick={() => setPatientInviteLink('')}>Dismiss</button>
+      </div>
+    </div>}
     <div className="ws-card"><div className="ws-section-title"><h2>Patient directory</h2><span>{patients.length} patients</span></div>
       {patients.length === 0 ? <Empty title="0 patients" description="No authorized patient accounts available." icon={Users}/> :
         <div className="ws-list">{patients.map(p => <div className="ws-list-row" key={p.id}>
