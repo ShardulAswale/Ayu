@@ -624,6 +624,11 @@ export function DashboardPage() {
             <span className="ws-initial">{p.email[0].toUpperCase()}</span>
             <span className="ws-list-text"><strong>{p.email}</strong><span>{p.active ? 'Active' : 'Inactive'} patient account</span></span>
           </button>
+          {role === 'admin' && !p.active && <button type="button" className="ws-secondary" disabled={busy}
+            onClick={() => void mutate('Replacement invitation created. Previous links are invalidated.', async () => {
+              const result = await workspaceApi<{ token: string }>('patients/' + p.id + '/invitations', 'POST');
+              setPatientInviteLink(window.location.origin + '/#activate?token=' + encodeURIComponent(result.token));
+            })}>Renew invite</button>}
           {role === 'admin' && <button type="button"
             className={p.active ? 'ws-patient-status ws-patient-status--active' : 'ws-patient-status ws-patient-status--inactive'}
             aria-label={(p.active ? 'Deactivate ' : 'Activate ') + p.email}
