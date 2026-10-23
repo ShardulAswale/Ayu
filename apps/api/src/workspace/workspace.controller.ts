@@ -15,7 +15,7 @@ import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { User, UserRole } from '../auth/user.schema';
 import {
-  AppointmentDto, AppointmentEditDto, AssignmentDto, ClinicalNoteDto, CreatePatientDto, CreatePatientInviteDto, PatientStatusDto, PatientMessageDto, FoodEntryDto, LayoutDto, PlanEditDto,
+  AppointmentDto, AppointmentEditDto, AssignmentDto, ClinicalNoteDto, CreatePatientDto, CreatePatientInviteDto, PatientStatusDto, PatientProfileDto, PatientMessageDto, FoodEntryDto, LayoutDto, PlanEditDto,
   PlanEntryDto, ProgressDto, RecipeDto,
 } from './workspace.dto';
 
@@ -23,7 +23,7 @@ const COLLECTION = {
   entries: 'FoodEntries', recipes: 'Recipes', plans: 'DietPlans',
   appointments: 'Appointments', assignments: 'PatientAssignments',
   layouts: 'DashboardLayouts', progress: 'ProgressEntries',
-  foods: 'Foods', tags: 'Tags', messages: 'PatientMessages', notes: 'ClinicalNotes', audits: 'AuditEvents', tokens: 'AccountTokens',
+  foods: 'Foods', tags: 'Tags', messages: 'PatientMessages', notes: 'ClinicalNotes', audits: 'AuditEvents', tokens: 'AccountTokens', profiles: 'PatientProfiles',
 } as const;
 const VALID_WIDGETS = [
   'patients', 'meetings', 'reviews', 'plans', 'activity', 'appointments', 'dietitians',
@@ -186,6 +186,36 @@ export class WorkspaceController {
       { $set: { active: false, deletedAt: new Date() }, $inc: { sessionVersion: 1 } },
     );
     if (!result.matchedCount) throw new NotFoundException('Patient not found');
+    return { ok: true };
+  }
+
+  @Get('patient-profile')
+  async patientProfile(@Req() req: Request, @Query('patientId') patient?: string) {
+    const patientId = await this.patientId(req, patient);
+    const record = await this.collection('profiles').findOne({ patientId });
+    return { patientId: String(patientId), displayName: record?.displayName || '',
+      timezone: record?.timezone || 'UTC' };
+  }
+
+  @ApiSecurity('csrf')
+  @Patch('patient-profile')
+  @Roles('patient')
+  @UseGuards(CsrfGuard)
+  async updateMyProfile(@Req() req: Request, @Body() dto: PatientProfileDto) {
+    const patientId = await this.patientId(req);
+    if (!Object.keys(dto).length) throw new BadRequestException('No profile changes supplied');
+    if (dto.timezone) {
+      try { new Intl.DateTimeFormat('en-US', { timeZone: dto.timezone }); }
+      catch { throw new BadRequestException('Invalid timezone'); }
+    }
+    const update: Record<string, unknown> = { updatedAt: new Date() };
+    if (dto.displayName !== undefined) update.displayName = dto.displayName.trim();
+    if (dto.timezone !== undefined) update.timezone = dto.timezone;
+    await this.collection('profiles').updateOne({ patientId },
+      { $set: update, $setOnInsert: { patientId, createdAt: new Date() } }, { upsert: true });
+    await this.collection('audits').insertOne({
+      action: 'profile.updated', actorId: patientId, patientId, createdAt: new Date(),
+    });
     return { ok: true };
   }
 
