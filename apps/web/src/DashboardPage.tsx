@@ -16,6 +16,7 @@ import { ClinicalNotesPanel, MessagingPanel } from './CarePanels';
 import { NutritionReportPanel } from './NutritionReportPanel';
 import { PatientProfilePanel } from './PatientProfilePanel';
 import { ProgressTrend } from './ProgressTrend';
+import { AuditLogPanel } from './AuditLogPanel';
 import { formatRecipeIngredients, displayText } from './recipe-format.mjs';
 import './workspace.css';
 
@@ -770,6 +771,7 @@ export function DashboardPage() {
         <div className="ws-card"><h2>Account</h2><p>Email: {user.email}</p><p>Role: {user.role}</p>
           <button className="ws-secondary" onClick={() => void logoutNow()}>Sign out</button></div>
         {isPatient && <PatientProfilePanel editable={true}/>}
+        {role === 'admin' && <AuditLogPanel/>}
       </div>;
       default: return homePage();
     }
