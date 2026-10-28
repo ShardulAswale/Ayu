@@ -20,7 +20,7 @@ export interface FoodCatalogPage { items: CatalogFood[]; total: number; page: nu
 
 export interface FoodEntry {
   id: string; foodName: string; eatenAt: string; quantity: number; unit: string;
-  notes?: string; recipeId?: string;
+  notes?: string; recipeId?: string; imageId?: string;
   nutrition?: { calories: number; protein: number; carbs: number; fat: number; fiber: number };
 }
 export interface PlanEntry {
@@ -56,4 +56,24 @@ export async function workspaceApi<T>(path: string, method = 'GET', data?: unkno
   }
   if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
+}
+
+/** Authenticated multipart upload. Never submit patient images to a public storage URL. */
+export async function mealImageRequest(entryId: string, method: 'GET'|'POST'|'DELETE', file?: Blob): Promise<Response> {
+  if (!root) throw new Error('API is not configured');
+  const csrf = method === 'GET' ? undefined : await getCsrf();
+  const form = file ? new FormData() : undefined;
+  if (form && file) form.append('image', file, 'sanitised-meal.webp');
+  const response = await fetch(root + '/workspace/entries/' + encodeURIComponent(entryId) + '/image', {
+    method, credentials:'include', cache:'no-store',
+    headers:csrf ? { 'x-ayu-csrf':csrf } : undefined,
+    body:form,
+  });
+  if (response.status === 401) throw new SessionExpiredError();
+  if (!response.ok) {
+    const info = await response.json().catch(()=>null) as { message?: string|string[] } | null;
+    throw new Error(Array.isArray(info?.message) ? info.message.join('; ') :
+      info?.message || 'Unable to process this meal image.');
+  }
+  return response;
 }

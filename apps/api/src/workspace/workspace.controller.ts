@@ -9,6 +9,7 @@ import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { Connection, Model, Types } from 'mongoose';
 import { Request } from 'express';
 import { PasswordService } from '../auth/password.service';
+import { MealImageService } from './meal-image.service';
 import { foodForWorkspace, recipeForWorkspace, escapedSearch } from './catalogue.mapper';
 import { CsrfGuard } from '../auth/csrf.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -45,6 +46,7 @@ export class WorkspaceController {
     @InjectConnection() private readonly connection: Connection,
     @InjectModel(User.name) private readonly users: Model<User>,
     private readonly passwords: PasswordService,
+    private readonly images: MealImageService,
   ) {}
 
   private collection(name: keyof typeof COLLECTION) {
@@ -449,9 +451,11 @@ export class WorkspaceController {
   @Roles('patient')
   @UseGuards(CsrfGuard)
   async deleteEntry(@Req() req: Request, @Param('id') id: string) {
-    await this.collection('entries').deleteOne({
+    const deleted = await this.collection('entries').findOneAndDelete({
       _id: this.validId(id), patientId: oid(req.session.userId!),
     });
+    if (!deleted) throw new NotFoundException('Food entry not found');
+    if (deleted.imageId) await this.images.remove(deleted.imageId);
     return { ok: true };
   }
 
@@ -491,7 +495,7 @@ export class WorkspaceController {
   @Roles('admin', 'dietitian')
   @UseGuards(CsrfGuard)
   async editPlan(@Req() req: Request, @Param('id') id: string, @Body() dto: PlanEditDto) {
-    await this.staff(req);
+    const editor = await this.staff(req);
     const record = await this.collection('plans').findOne({ _id: this.validId(id) });
     if (!record) throw new NotFoundException();
     await this.patientId(req, String(record.patientId));
@@ -499,7 +503,17 @@ export class WorkspaceController {
     const update: Record<string, unknown> = { ...dto, updatedAt: new Date() };
     if (dto.plannedAt) update.plannedAt = new Date(dto.plannedAt);
     if (dto.title) update.title = dto.title.trim();
-    await this.collection('plans').updateOne({ _id: record._id }, { $set: update });
+    const previous = await this.collection('plans').findOneAndUpdate({ _id: record._id },
+      { $set: update, $inc: { revision: 1 } }, { returnDocument:'before' });
+    if (!previous) throw new NotFoundException();
+    await this.connection.db!.collection('DietPlanRevisions').insertOne({
+      planId:record._id,patientId:record.patientId,operation:'edited',
+      before:{title:previous.title,plannedAt:previous.plannedAt,notes:previous.notes,
+        status:previous.status,recipeId:previous.recipeId},
+      after:{title:update.title ?? previous.title,plannedAt:update.plannedAt ?? previous.plannedAt,
+        notes:update.notes ?? previous.notes,status:update.status ?? previous.status,recipeId:previous.recipeId},
+      actorId:oid(editor.id),createdAt:new Date(),
+    });
     return { ok: true };
   }
 
