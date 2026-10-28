@@ -180,18 +180,8 @@
 .ws-patient-status:disabled{opacity:.6;cursor:wait}
 @media(max-width:700px){.ws-patient-status{min-width:76px;padding:8px 10px}}
 
-/* Private care notes and messages */
-.ws-care-panel{display:flex;flex-direction:column;gap:13px}
-.ws-care-panel h2{margin:0}
-.ws-care-panel>p{margin:0;color:#566c5e;line-height:1.5}
-.ws-care-thread{display:grid;gap:12px;max-height:450px;overflow-y:auto}
-.ws-care-message{background:#f4f8f4;border:1px solid #dce8dd;padding:13px;border-radius:10px;overflow-wrap:anywhere}
-.ws-care-message small{display:block;font-size:11px;color:#5b7464;margin-bottom:8px}
-.ws-care-message p{margin:0;white-space:pre-wrap;line-height:1.55}
-.ws-care-compose{display:flex;flex-direction:column;gap:8px;align-items:stretch}
-.ws-care-compose label{font-weight:600}
-.ws-care-compose textarea,.ws-care-compose input{width:100%;border:1px solid #bccfc2;border-radius:8px;padding:10px;background:#fff;color:#213b32;resize:vertical}
-.ws-care-compose button{align-self:flex-end}
-.ws-care-error{color:#a72020!important}
-
-.ws-progress-chart{width:100%;height:auto;max-height:270px}
+.ws-catalogue-filters{display:flex;flex-wrap:wrap;gap:12px;align-items:end;margin:15px 0}
+.ws-catalogue-filters label{display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:600;min-width:145px;flex:1}
+.ws-catalogue-filters input,.ws-catalogue-filters select{min-height:39px;padding:8px;border:1px solid #c9d8cf;border-radius:7px;background:white;color:#173d32;max-width:100%}
+.ws-catalogue-chips{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 14px}
+.ws-catalogue-chips button{padding:7px 11px;border:1px solid #b5d1c2;border-radius:20px;background:#eaf5ee;color:#18523a;cursor:pointer}

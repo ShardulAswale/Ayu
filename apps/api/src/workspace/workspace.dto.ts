@@ -18,6 +18,7 @@ export class RecipeDto {
   @ApiProperty({ type: Number }) @IsNumber() @Min(0) @Max(10000) fat!: number;
   @ApiProperty({ type: Number }) @IsNumber() @Min(0) @Max(10000) fiber!: number;
   @ApiPropertyOptional({}) @IsOptional() @IsString() @MaxLength(500) allergens?: string;
+  @ApiPropertyOptional({ type: [String] }) @IsOptional() @IsArray() @IsString({ each: true }) @MaxLength(40, { each: true }) tags?: string[];
   @ApiPropertyOptional({}) @IsOptional() @IsString() @MaxLength(400) source?: string;
   @ApiPropertyOptional({}) @IsOptional() @IsString() @MaxLength(3000) instructions?: string;
 }
