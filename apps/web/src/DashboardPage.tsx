@@ -12,6 +12,11 @@ import {
 } from './workspace-client';
 import { dashboardPathForRole } from './role-routing.mjs';
 import { FoodCatalogueSection } from './FoodCatalogueSection';
+import { ClinicalNotesPanel, MessagingPanel } from './CarePanels';
+import { NutritionReportPanel } from './NutritionReportPanel';
+import { PatientProfilePanel } from './PatientProfilePanel';
+import { ProgressTrend } from './ProgressTrend';
+import { AuditLogPanel } from './AuditLogPanel';
 import { formatRecipeIngredients, displayText } from './recipe-format.mjs';
 import './workspace.css';
 
@@ -137,6 +142,7 @@ export function DashboardPage() {
   const [planForm, setPlanForm] = React.useState({
     title: '', plannedAt: localDateTime(new Date()), notes: '', status: 'draft', recipeId: '',
   });
+  const [appointmentEditing, setAppointmentEditing] = React.useState('');
   const [visitForm, setVisitForm] = React.useState({
     title: '', startsAt: localDateTime(new Date()), durationMinutes: '30', dietitianId: '',
   });
@@ -145,7 +151,8 @@ export function DashboardPage() {
   });
   const [assignDietitian, setAssignDietitian] = React.useState('');
   const [patientCreateOpen, setPatientCreateOpen] = React.useState(false);
-  const [newPatient, setNewPatient] = React.useState({ email: '', password: '' });
+  const [newPatient, setNewPatient] = React.useState({ email: '' });
+  const [patientInviteLink, setPatientInviteLink] = React.useState('');
   const [patientDelete, setPatientDelete] = React.useState<PatientRef | null>(null);
 
   React.useEffect(() => {
@@ -511,28 +518,42 @@ export function DashboardPage() {
 
   const appointmentsPage = () => <div className="ws-stack">
     {pageHeading('Consultations','Appointments','Upcoming meetings and consultation scheduling.',
-      isStaff && <button className="ws-primary" onClick={() => setFormOpen(!formOpen)}><Plus size={16}/> Schedule meeting</button>)}
+      isStaff && <button className="ws-primary" onClick={() => {setAppointmentEditing('');setFormOpen(!formOpen);}}><Plus size={16}/> Schedule meeting</button>)}
     {isStaff && formOpen && <form className="ws-card ws-form" onSubmit={event => {
       event.preventDefault();
       const clinician = role === 'dietitian' ? user.id : visitForm.dietitianId;
-      void mutate('Appointment scheduled.', () => workspaceApi('appointments','POST',{
-        patientId:selectedPatient,dietitianId:clinician,startsAt:new Date(visitForm.startsAt).toISOString(),
-        title:visitForm.title,durationMinutes:Number(visitForm.durationMinutes),
-      }));
+      void mutate(appointmentEditing ? 'Appointment updated.' : 'Appointment scheduled.', async () => {
+        if (appointmentEditing) await workspaceApi('appointments/' + appointmentEditing, 'PATCH', {
+          startsAt:new Date(visitForm.startsAt).toISOString(),title:visitForm.title,
+          durationMinutes:Number(visitForm.durationMinutes),
+        });
+        else await workspaceApi('appointments','POST',{
+          patientId:selectedPatient,dietitianId:clinician,startsAt:new Date(visitForm.startsAt).toISOString(),
+          title:visitForm.title,durationMinutes:Number(visitForm.durationMinutes),
+        });
+        setAppointmentEditing('');
+      });
     }}>
-      <h2>Schedule consultation</h2>
+      <h2>{appointmentEditing ? 'Reschedule consultation' : 'Schedule consultation'}</h2>
       <div className="ws-form-grid">
-        <label>Patient<select required value={selectedPatient} onChange={e => setSelectedPatient(e.target.value)}><option value="">Select patient</option>{patients.map(p => <option key={p.id} value={p.id}>{p.email}</option>)}</select></label>
-        {role === 'admin' && <label>Dietitian<select required value={visitForm.dietitianId} onChange={e => setVisitForm({ ...visitForm,dietitianId:e.target.value })}><option value="">Select dietitian</option>{dietitians.map(d => <option key={d.id} value={d.id}>{d.email}</option>)}</select></label>}
+        <label>Patient<select required disabled={Boolean(appointmentEditing)} value={selectedPatient} onChange={e => setSelectedPatient(e.target.value)}><option value="">Select patient</option>{patients.map(p => <option key={p.id} value={p.id}>{p.email}</option>)}</select></label>
+        {role === 'admin' && !appointmentEditing && <label>Dietitian<select required value={visitForm.dietitianId} onChange={e => setVisitForm({ ...visitForm,dietitianId:e.target.value })}><option value="">Select dietitian</option>{dietitians.map(d => <option key={d.id} value={d.id}>{d.email}</option>)}</select></label>}
         <label>Title<input required value={visitForm.title} maxLength={160} onChange={e => setVisitForm({ ...visitForm,title:e.target.value })}/></label>
         <label>Starts at<input required type="datetime-local" value={visitForm.startsAt} onChange={e => setVisitForm({ ...visitForm,startsAt:e.target.value })}/></label>
         <label>Duration (minutes)<input required type="number" min="15" max="240" step="1" value={visitForm.durationMinutes} onChange={e => setVisitForm({ ...visitForm,durationMinutes:e.target.value })}/></label>
-      </div><button className="ws-primary" disabled={busy}>Save appointment</button></form>}
+      </div><div className="ws-form-actions"><button className="ws-primary" disabled={busy}>{appointmentEditing ? 'Save changes' : 'Save appointment'}</button><button type="button" className="ws-secondary" onClick={() => {setFormOpen(false);setAppointmentEditing('');}}>Cancel</button></div></form>}
     <div className="ws-card"><div className="ws-section-title"><h2>Consultation schedule</h2><span>{appointments.length} meetings</span></div>
       {appointments.length === 0 ? <Empty title="0 appointments" description="No consultations are currently scheduled." icon={CalendarDays}/> :
         <div className="ws-list">{appointments.map(item => <article className="ws-list-row" key={item.id}>
           <div className="ws-time">{fmt(item.startsAt)}</div><div className="ws-list-text"><strong>{item.title}</strong>
             <span>{item.durationMinutes} minutes{isStaff ? ' · ' + (patients.find(p => p.id === String(item.patientId))?.email || 'Patient') : ''}</span></div>
+          {isStaff && <button type="button" className="ws-secondary" onClick={() => {
+            setAppointmentEditing(item.id);
+            setSelectedPatient(String(item.patientId));
+            setVisitForm({ title:item.title, startsAt:localDateTime(new Date(item.startsAt)),
+              durationMinutes:String(item.durationMinutes), dietitianId:item.dietitianId });
+            setFormOpen(true);
+          }}>Edit</button>}
           {isStaff && <button className="ws-icon-button" aria-label="Cancel appointment" onClick={() => { if (window.confirm('Delete this appointment?')) void mutate('Appointment removed.', () => workspaceApi('appointments/' + item.id,'DELETE')); }}><Trash2 size={16}/></button>}
         </article>)}</div>}
     </div>
@@ -554,6 +575,7 @@ export function DashboardPage() {
         <label>Unit<input required maxLength={20} value={progressForm.unit} onChange={e => setProgressForm({ ...progressForm,unit:e.target.value })}/></label>
         <label>When measured<input required type="datetime-local" value={progressForm.measuredAt} onChange={e => setProgressForm({ ...progressForm,measuredAt:e.target.value })}/></label>
       </div><button className="ws-primary" disabled={busy}>Save measurement</button></form>}
+    <ProgressTrend entries={progress}/>
     <div className="ws-card"><h2>Measurement history</h2>
       {progress.length === 0 ? <Empty title="0 progress records" description="Measurements appear here once logged." icon={Activity}/> :
         <div className="ws-list">{progress.map(p => <div className="ws-list-row" key={p.id}>
@@ -569,7 +591,7 @@ export function DashboardPage() {
         <div className="ws-patient-identity"><HeartPulse size={22}/><div><strong>{selectedPatientName}</strong><p>Assigned patient workspace</p></div></div>}
     </div>
     {scopedPatient && <>
-      <div className="ws-tabs">{['Overview','Food diary','Diet plan','Progress','Appointments','Messages'].map(tab =>
+      <div className="ws-tabs">{['Overview','Profile','Food diary','Diet plan','Progress','Appointments','Messages','Clinical notes','Nutrition report'].map(tab =>
         <button key={tab} className={selectedTab === tab ? 'active' : ''} onClick={() => { setSelectedTab(tab);setFormOpen(false); }}>{tab}</button>)}</div>
       {selectedTab === 'Overview' && <div className="ws-grid-two">
         <div className="ws-card"><h2>Food diary</h2><Empty title={int(entries.length) + ' entries'} description="The patient’s chronological food log." icon={UtensilsCrossed}/></div>
@@ -577,14 +599,14 @@ export function DashboardPage() {
         <div className="ws-card"><h2>Progress</h2><Empty title={int(progress.length) + ' measurements'} description="Recorded patient measurements." icon={Activity}/></div>
         <div className="ws-card"><h2>Appointments</h2><Empty title={int(appointments.length) + ' meetings'} description="Scheduled consultations." icon={Clock3}/></div>
       </div>}
+      {selectedTab === 'Profile' && <PatientProfilePanel key={'profile:' + selectedPatient} patientId={selectedPatient} editable={false}/>}
       {selectedTab === 'Food diary' && foodDiary(true)}
       {selectedTab === 'Diet plan' && dietPlan(true)}
       {selectedTab === 'Progress' && progressPage(true)}
       {selectedTab === 'Appointments' && appointmentsPage()}
-      {selectedTab === 'Messages' && <div className="ws-card" role="region" aria-label="Patient messages">
-        <div className="ws-section-title"><h2>Messages with {selectedPatientName}</h2></div>
-        <Empty title="No messages yet" description="Secure patient messaging is not yet connected. Conversation history and message sending will appear here when the messaging service is implemented." icon={MessageCircle}/>
-      </div>}
+      {selectedTab === 'Messages' && <MessagingPanel key={'messages:' + selectedPatient} patientId={selectedPatient} patientLabel={selectedPatientName}/>}
+      {selectedTab === 'Clinical notes' && <ClinicalNotesPanel key={'notes:' + selectedPatient} patientId={selectedPatient}/>} 
+      {selectedTab === 'Nutrition report' && <NutritionReportPanel key={'report:' + selectedPatient} patientId={selectedPatient}/>} 
     </>}
   </div>;
 
@@ -594,17 +616,29 @@ export function DashboardPage() {
       role === 'admin' && <button className="ws-primary" type="button" onClick={() => setPatientCreateOpen(v => !v)}><Plus size={16}/> Create patient</button>)}
     {role === 'admin' && patientCreateOpen && <form className="ws-card ws-form" onSubmit={event => {
       event.preventDefault();
-      void mutate('Patient account created inactive. Activate only after securely sharing credentials and completing onboarding.',
-        async () => { await workspaceApi('patients', 'POST', { email: newPatient.email.trim(), password: newPatient.password }); setNewPatient({ email: '', password: '' }); setPatientCreateOpen(false); });
+      void mutate('Patient invitation created. Share the one-time link through a trusted channel.',
+        async () => {
+          const result = await workspaceApi<{ token: string; expiresAt: string }>('patients/invitations', 'POST', { email: newPatient.email.trim() });
+          setPatientInviteLink(window.location.origin + '/#activate?token=' + encodeURIComponent(result.token));
+          setNewPatient({ email: '' }); setPatientCreateOpen(false);
+        });
     }}>
-      <h2>Create patient account</h2><p>Accounts are created inactive. Use a strong temporary password and share it securely; invitation and password-setup emails are not implemented yet.</p>
+      <h2>Invite a patient</h2><p>Creates an inactive account and a single-use, 48-hour activation link. The patient chooses their own password. Email delivery is not connected; share privately.</p>
       <div className="ws-form-grid">
-        <label>Email<input type="email" required maxLength={254} autoComplete="off" value={newPatient.email} onChange={e => setNewPatient(v => ({...v,email:e.target.value}))}/></label>
-        <label>Temporary password<input type="password" required minLength={12} maxLength={128} autoComplete="new-password" value={newPatient.password} onChange={e => setNewPatient(v => ({...v,password:e.target.value}))}/></label>
+        <label>Email<input type="email" required maxLength={254} autoComplete="off" value={newPatient.email} onChange={e => setNewPatient({email:e.target.value})}/></label>
       </div>
-      <div className="ws-form-actions"><button className="ws-primary" disabled={busy}>Create inactive patient</button>
+      <div className="ws-form-actions"><button className="ws-primary" disabled={busy}>Create invitation</button>
         <button type="button" className="ws-secondary" onClick={() => setPatientCreateOpen(false)}>Cancel</button></div>
     </form>}
+    {role === 'admin' && patientInviteLink && <div className="ws-card ws-form">
+      <h2>One-time activation link</h2>
+      <p>Visible only in this browser until you navigate away or refresh. Expires after 48 hours. Never post it publicly.</p>
+      <input aria-label="Patient invitation link" readOnly value={patientInviteLink} onFocus={e=>e.currentTarget.select()}/>
+      <div className="ws-form-actions">
+        <button type="button" className="ws-secondary" onClick={() => { void navigator.clipboard.writeText(patientInviteLink); }}>Copy private link</button>
+        <button type="button" className="ws-secondary" onClick={() => setPatientInviteLink('')}>Dismiss</button>
+      </div>
+    </div>}
     <div className="ws-card"><div className="ws-section-title"><h2>Patient directory</h2><span>{patients.length} patients</span></div>
       {patients.length === 0 ? <Empty title="0 patients" description="No authorized patient accounts available." icon={Users}/> :
         <div className="ws-list">{patients.map(p => <div className="ws-list-row" key={p.id}>
@@ -615,6 +649,11 @@ export function DashboardPage() {
             <span className="ws-initial">{p.email[0].toUpperCase()}</span>
             <span className="ws-list-text"><strong>{p.email}</strong><span>{p.active ? 'Active' : 'Inactive'} patient account</span></span>
           </button>
+          {role === 'admin' && !p.active && <button type="button" className="ws-secondary" disabled={busy}
+            onClick={() => void mutate('Replacement invitation created. Previous links are invalidated.', async () => {
+              const result = await workspaceApi<{ token: string }>('patients/' + p.id + '/invitations', 'POST');
+              setPatientInviteLink(window.location.origin + '/#activate?token=' + encodeURIComponent(result.token));
+            })}>Renew invite</button>}
           {role === 'admin' && <button type="button"
             className={p.active ? 'ws-patient-status ws-patient-status--active' : 'ws-patient-status ws-patient-status--inactive'}
             aria-label={(p.active ? 'Deactivate ' : 'Activate ') + p.email}
@@ -703,8 +742,12 @@ export function DashboardPage() {
       </div></div>
   </div>;
 
-  const reportsPage = () => <div className="ws-stack">{pageHeading('Practice insights','Reports','Summary metrics from authorized data sources.')}
-    {renderMetrics(allWidgets.slice(0,4))}<div className="ws-card"><Empty title="0 generated reports" description="Exportable reports will be available once report generation is integrated." icon={ClipboardList}/></div></div>;
+  const reportsPage = () => <div className="ws-stack">{pageHeading('Practice insights','Reports','Nutrition from recorded diary entries without estimated values.')}
+    {renderMetrics(allWidgets.slice(0,4))}
+    <div className="ws-card">{choosePatient}</div>
+    {selectedPatient ? <NutritionReportPanel key={'staff-report:' + selectedPatient} patientId={selectedPatient}/> :
+      <Empty title="Select patient" description="Select an authorised patient to generate a nutrition report." icon={ClipboardList}/>}
+  </div>;
   const insightsPage = () => <div className="ws-stack">{pageHeading('Nutrition insights','Your food insights',
     'Totals from food logs that reference recipes with recorded nutrient information.')}
     <div className="ws-metrics">
@@ -712,7 +755,7 @@ export function DashboardPage() {
       <Metric name="Known energy" value={int(stats?.values.calories) + ' kcal'} note="Unestimated foods excluded" icon={Activity}/>
       <Metric name="Known protein" value={int(stats?.values.protein) + ' g'} note="Unestimated foods excluded" icon={HeartPulse}/>
     </div>
-    <div className="ws-card"><Empty title="0 trend charts" description="Trends will be displayed when enough validated nutrition data is available." icon={ChartNoAxesCombined}/></div>
+    <NutritionReportPanel/>
   </div>;
 
   const content = () => {
@@ -744,10 +787,16 @@ export function DashboardPage() {
       case 'appointments': return appointmentsPage();
       case 'reports': return reportsPage();
       case 'messages': return <div className="ws-stack">{pageHeading('Communications','Messages','Secure patient and practitioner messages.')}
-        <div className="ws-card"><Empty title="0 conversations" description="Secure messaging is not yet connected. No sample messages are shown." icon={MessageCircle}/></div></div>;
+        {isStaff && <div className="ws-card">{choosePatient}</div>}
+        {scopedPatient ? <MessagingPanel key={'global-messages:' + selectedPatient} patientId={isPatient ? undefined : selectedPatient} patientLabel={isPatient ? undefined : selectedPatientName}/> :
+          <Empty title="Select patient" description="Choose a patient from your authorised directory to view their care conversation." icon={MessageCircle}/>}
+      </div>;
       case 'settings': return <div className="ws-stack">{pageHeading('Your workspace','Settings','Account identity and access.')}
         <div className="ws-card"><h2>Account</h2><p>Email: {user.email}</p><p>Role: {user.role}</p>
-          <button className="ws-secondary" onClick={() => void logoutNow()}>Sign out</button></div></div>;
+          <button className="ws-secondary" onClick={() => void logoutNow()}>Sign out</button></div>
+        {isPatient && <PatientProfilePanel editable={true}/>}
+        {role === 'admin' && <AuditLogPanel/>}
+      </div>;
       default: return homePage();
     }
   };
