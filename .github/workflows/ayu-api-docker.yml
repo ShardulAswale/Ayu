@@ -2,6 +2,11 @@
 name: Ayu API Docker
 
 on:
+  push:
+    branches: [dev]
+    paths:
+      - .github/workflows/ayu-api-docker.yml
+      - apps/api/**
   workflow_dispatch:
 
 permissions:
