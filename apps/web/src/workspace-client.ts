@@ -6,7 +6,7 @@ export interface WorkspaceStats {
 }
 export interface PatientRef { id: string; email: string; active: boolean }
 export interface Recipe {
-  id: string; name: string; ingredients: unknown; instructions?: unknown; source?: unknown; allergens?: unknown;
+  id: string; name: string; ingredients: unknown; instructions?: unknown; source?: unknown; allergens?: unknown; tags?: string[];
   calories: number | null; protein: number | null; carbs: number | null; fat: number | null; fiber: number | null;
 }
 export interface CatalogTag { id: string; slug: string | null; label: string | null }
