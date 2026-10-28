@@ -18,6 +18,7 @@ export class RecipeDto {
   @ApiProperty({ type: Number }) @IsNumber() @Min(0) @Max(10000) fat!: number;
   @ApiProperty({ type: Number }) @IsNumber() @Min(0) @Max(10000) fiber!: number;
   @ApiPropertyOptional({}) @IsOptional() @IsString() @MaxLength(500) allergens?: string;
+  @ApiPropertyOptional({ type: [String] }) @IsOptional() @IsArray() @IsString({ each: true }) @MaxLength(40, { each: true }) tags?: string[];
   @ApiPropertyOptional({}) @IsOptional() @IsString() @MaxLength(400) source?: string;
   @ApiPropertyOptional({}) @IsOptional() @IsString() @MaxLength(3000) instructions?: string;
 }
@@ -64,4 +65,31 @@ export class CreatePatientDto {
 }
 export class PatientStatusDto {
   @ApiProperty({ type: Boolean }) @IsBoolean() active!: boolean;
+}
+
+/** Messages contain text only; attachments require a separate reviewed upload workflow. */
+export class PatientMessageDto {
+  @ApiPropertyOptional({}) @IsOptional() @IsMongoId() patientId?: string;
+  @ApiProperty({}) @IsString() @MinLength(1) @MaxLength(2000) body!: string;
+}
+
+export class ClinicalNoteDto {
+  @ApiProperty({}) @IsMongoId() patientId!: string;
+  @ApiProperty({}) @IsString() @MinLength(1) @MaxLength(160) title!: string;
+  @ApiProperty({}) @IsString() @MinLength(1) @MaxLength(10000) body!: string;
+}
+
+export class AppointmentEditDto {
+  @ApiPropertyOptional({}) @IsOptional() @IsDateString() startsAt?: string;
+  @ApiPropertyOptional({}) @IsOptional() @IsString() @MinLength(1) @MaxLength(160) title?: string;
+  @ApiPropertyOptional({ type: Number }) @IsOptional() @IsInt() @Min(15) @Max(240) durationMinutes?: number;
+}
+
+export class CreatePatientInviteDto {
+  @ApiProperty({}) @IsEmail() @MaxLength(254) email!: string;
+}
+
+export class PatientProfileDto {
+  @ApiPropertyOptional({}) @IsOptional() @IsString() @MaxLength(120) displayName?: string;
+  @ApiPropertyOptional({}) @IsOptional() @IsString() @MaxLength(64) timezone?: string;
 }

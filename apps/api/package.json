@@ -11,9 +11,8 @@
     "test:smoke": "node -e \"require('./dist/app.module.js'); console.log('Nest module imports loaded')\"",
     "test:session": "node --test tests/session-binding.test.mjs",
     "test:catalogue": "node --test tests/catalogue.test.mjs",
-    "test:meal-security": "node --test tests/meal-image-security.test.mjs",
-    "test:plan-workflows": "node --test tests/plan-workflows.test.mjs",
-    "db:meal-plan-indexes": "node scripts/create-meal-plan-indexes.mjs"
+    "db:indexes": "node scripts/create-indexes.mjs",
+    "test:care": "node --test tests/care-security.test.mjs"
   },
   "dependencies": {
     "@nestjs/common": "^12.1.3",
