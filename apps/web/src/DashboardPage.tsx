@@ -12,6 +12,8 @@ import {
 } from './workspace-client';
 import { dashboardPathForRole } from './role-routing.mjs';
 import { FoodCatalogueSection } from './FoodCatalogueSection';
+import { MealImagePanel } from './MealImagePanel';
+import { PlanWorkflowTools, PlanHistoryButton } from './PlanWorkflowTools';
 import { ClinicalNotesPanel, MessagingPanel } from './CarePanels';
 import { NutritionReportPanel } from './NutritionReportPanel';
 import { PatientProfilePanel } from './PatientProfilePanel';
