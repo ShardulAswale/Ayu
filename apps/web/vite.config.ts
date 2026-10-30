@@ -10,8 +10,8 @@ export default defineConfig(({ mode }) => {
     registerType: 'autoUpdate',
     includeAssets: [],
     manifest: {
-      name: 'Ayu — Nutrition Care', short_name: 'Ayu',
-      description: 'Nutrition care, thoughtfully connected.',
+      name: 'Ayu — By Shruti Kulkarni', short_name: 'Ayu',
+      description: 'Nutrition and wellness by Shruti Kulkarni.',
       theme_color: '#153e35', background_color: '#f6f8f4',
       display: 'standalone', start_url: base, scope: base,
       icons: [{ src: `${base}icon.svg`, sizes: 'any', type: 'image/svg+xml', purpose: 'any' }]
